@@ -2,7 +2,6 @@ node_modules
 # Keep environment variables out of version control
 .vercel
 **/node_modules/
-**/dist/
 .next/
 .hintrc
 .DS_Store
