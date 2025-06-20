@@ -1,0 +1,182 @@
+[
+  {
+    "id": 1,
+    "country": "United States",
+    "city": "Pasadena",
+    "state": "CA",
+    "address": "123 Colorado Blvd",
+    "postalCode": "91105",
+    "coordinates": "POINT(-118.144516 34.147785)"
+  },
+  {
+    "id": 2,
+    "country": "United States",
+    "city": "Santa Monica",
+    "state": "CA",
+    "address": "456 Ocean Ave",
+    "postalCode": "90401",
+    "coordinates": "POINT(-118.496513 34.013654)"
+  },
+  {
+    "id": 3,
+    "country": "United States",
+    "city": "Burbank",
+    "state": "CA",
+    "address": "789 Hollywood Way",
+    "postalCode": "91505",
+    "coordinates": "POINT(-118.328661 34.180839)"
+  },
+  {
+    "id": 4,
+    "country": "United States",
+    "city": "Long Beach",
+    "state": "CA",
+    "address": "101 Pine Ave",
+    "postalCode": "90802",
+    "coordinates": "POINT(-118.192604 33.766720)"
+  },
+  {
+    "id": 6,
+    "country": "United States",
+    "city": "Malibu",
+    "state": "CA",
+    "address": "888 Malibu Road",
+    "postalCode": "90265",
+    "coordinates": "POINT(-118.774518 34.025922)"
+  },
+  {
+    "id": 7,
+    "country": "United States",
+    "city": "Glendale",
+    "state": "CA",
+    "address": "777 Brand Blvd",
+    "postalCode": "91203",
+    "coordinates": "POINT(-118.254708 34.142508)"
+  },
+  {
+    "id": 8,
+    "country": "United States",
+    "city": "Torrance",
+    "state": "CA",
+    "address": "555 Torrance Blvd",
+    "postalCode": "90503",
+    "coordinates": "POINT(-118.352575 33.835849)"
+  },
+  {
+    "id": 10,
+    "country": "United States",
+    "city": "Beverly Hills",
+    "state": "CA",
+    "address": "789 Rodeo Dr",
+    "postalCode": "90210",
+    "coordinates": "POINT(-118.400356 34.073620)"
+  },
+  {
+    "id": 11,
+    "country": "Austria",
+    "city": "Vienna",
+    "state": "Vienna",
+    "address": "Ringstraße 1",
+    "postalCode": "1010",
+    "coordinates": "POINT(16.373819 48.208174)"
+  },
+  {
+    "id": 12,
+    "country": "Austria",
+    "city": "Graz",
+    "state": "Styria",
+    "address": "Hauptplatz 10",
+    "postalCode": "8010",
+    "coordinates": "POINT(15.439504 47.070714)"
+  },
+  {
+    "id": 13,
+    "country": "Austria",
+    "city": "Linz",
+    "state": "Upper Austria",
+    "address": "Landstraße 5",
+    "postalCode": "4020",
+    "coordinates": "POINT(14.285830 48.306940)"
+  },
+  {
+    "id": 14,
+    "country": "Austria",
+    "city": "Salzburg",
+    "state": "Salzburg",
+    "address": "Schwarzstraße 2",
+    "postalCode": "5020",
+    "coordinates": "POINT(13.055010 47.809490)"
+  },
+  {
+    "id": 15,
+    "country": "Austria",
+    "city": "Innsbruck",
+    "state": "Tyrol",
+    "address": "Maria-Theresien-Straße 13",
+    "postalCode": "6020",
+    "coordinates": "POINT(11.404100 47.269210)"
+  },
+  {
+    "id": 16,
+    "country": "Austria",
+    "city": "Klagenfurt",
+    "state": "Carinthia",
+    "address": "Alter Platz 8",
+    "postalCode": "9020",
+    "coordinates": "POINT(14.308830 46.636110)"
+  },
+  {
+    "id": 17,
+    "country": "Austria",
+    "city": "Bregenz",
+    "state": "Vorarlberg",
+    "address": "Marktstraße 3",
+    "postalCode": "6900",
+    "coordinates": "POINT(9.747170 47.503570)"
+  },
+  {
+    "id": 18,
+    "country": "Austria",
+    "city": "Villach",
+    "state": "Carinthia",
+    "address": "Hauptplatz 1",
+    "postalCode": "9500",
+    "coordinates": "POINT(13.855270 46.610550)"
+  },
+  {
+    "id": 19,
+    "country": "Austria",
+    "city": "St. Pölten",
+    "state": "Lower Austria",
+    "address": "Landhausplatz 1",
+    "postalCode": "3100",
+    "coordinates": "POINT(15.626720 48.203100)"
+  },
+  {
+    "id": 20,
+    "country": "Austria",
+    "city": "Dornbirn",
+    "state": "Vorarlberg",
+    "address": "Marktplatz 4",
+    "postalCode": "6850",
+    "coordinates": "POINT(9.741820 47.412450)"
+  },
+  {
+    "id": 21,
+    "country": "Austria",
+    "city": "Krems an der Donau",
+    "state": "Lower Austria",
+    "address": "Dominikanerplatz 2",
+    "postalCode": "3500",
+    "coordinates": "POINT(15.620640 48.408160)"
+  },
+  {
+    "id": 22,
+    "country": "Austria",
+    "city": "Eisenstadt",
+    "state": "Burgenland",
+    "address": "Hauptstraße 5",
+    "postalCode": "7000",
+    "coordinates": "POINT(16.521400 47.845400)"
+  }
+]

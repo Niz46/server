@@ -1,0 +1,65 @@
+[
+  {
+    "id": 1,
+    "startDate": "2023-07-01T00:00:00Z",
+    "endDate": "2024-06-30T00:00:00Z",
+    "rent": 1500.0,
+    "deposit": 1500.0,
+    "propertyId": 1,
+    "tenantCognitoId": "us-east-1:0418c488-50d1-709a-e1a4-0f6887216a3b"
+  },
+  {
+    "id": 2,
+    "startDate": "2023-08-01T00:00:00Z",
+    "endDate": "2024-07-31T00:00:00Z",
+    "rent": 1800.0,
+    "deposit": 1800.0,
+    "propertyId": 2,
+    "tenantCognitoId": "us-east-1:14288468-f0f1-70e8-cd81-e693257d5cc6"
+  },
+  {
+    "id": 3,
+    "startDate": "2023-09-01T00:00:00Z",
+    "endDate": "2024-08-31T00:00:00Z",
+    "rent": 2200.0,
+    "deposit": 2200.0,
+    "propertyId": 3,
+    "tenantCognitoId": "us-east-1:a43824f8-0031-702c-9202-39a38d067e17"
+  },
+  {
+    "id": 4,
+    "startDate": "2023-07-15T00:00:00Z",
+    "endDate": "2024-07-14T00:00:00Z",
+    "rent": 1700.0,
+    "deposit": 1700.0,
+    "propertyId": 4,
+    "tenantCognitoId": "us-east-1:d4889488-7041-7008-b83d-fc16d7ddb3ff"
+  },
+  {
+    "id": 5,
+    "startDate": "2023-08-15T00:00:00Z",
+    "endDate": "2024-08-14T00:00:00Z",
+    "rent": 2000.0,
+    "deposit": 2000.0,
+    "propertyId": 2,
+    "tenantCognitoId": "us-east-1:0418c488-50d1-709a-e1a4-0f6887216a3b"
+  },
+  {
+    "id": 6,
+    "startDate": "2023-09-15T00:00:00Z",
+    "endDate": "2024-09-14T00:00:00Z",
+    "rent": 2400.0,
+    "deposit": 2400.0,
+    "propertyId": 6,
+    "tenantCognitoId": "us-east-1:14288468-f0f1-70e8-cd81-e693257d5cc6"
+  },
+  {
+    "id": 7,
+    "startDate": "2023-10-01T00:00:00Z",
+    "endDate": "2024-09-30T00:00:00Z",
+    "rent": 2200.0,
+    "deposit": 2200.0,
+    "propertyId": 3,
+    "tenantCognitoId": "us-east-1:a43824f8-0031-702c-9202-39a38d067e17"
+  }
+]
