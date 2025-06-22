@@ -334,7 +334,6 @@ function main() {
                     data: {
                         id: p.id,
                         name: p.name,
-                        address: locationExists.address,
                         description: p.description,
                         pricePerMonth: p.pricePerMonth,
                         securityDeposit: p.securityDeposit,
