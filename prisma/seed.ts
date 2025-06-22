@@ -53,7 +53,9 @@ const propertySchema = z.object({
   baths: z.number().nonnegative(),
   squareFeet: z.number().int().nonnegative(),
   propertyType: z.string(),
-  postedDate: z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
+  postedDate: z
+    .string()
+    .refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
   averageRating: z.number().optional(),
   numberOfReviews: z.number().optional(),
   locationId: z.number().int().positive(),
@@ -63,8 +65,12 @@ type PropertyRecord = z.infer<typeof propertySchema>;
 
 const leaseSchema = z.object({
   id: z.number().int().positive(),
-  startDate: z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
-  endDate: z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
+  startDate: z
+    .string()
+    .refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
+  endDate: z
+    .string()
+    .refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
   rent: z.number().nonnegative(),
   deposit: z.number().nonnegative(),
   propertyId: z.number().int().positive(),
@@ -74,8 +80,14 @@ type LeaseRecord = z.infer<typeof leaseSchema>;
 
 const applicationSchema = z.object({
   id: z.number().int().positive(),
-  applicationDate: z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
-  status: z.union([z.literal("Pending"), z.literal("Denied"), z.literal("Approved")]),
+  applicationDate: z
+    .string()
+    .refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
+  status: z.union([
+    z.literal("Pending"),
+    z.literal("Denied"),
+    z.literal("Approved"),
+  ]),
   propertyId: z.number().int().positive(),
   tenantCognitoId: z.string().min(1),
   name: z.string(),
@@ -90,8 +102,12 @@ const paymentSchema = z.object({
   id: z.number().int().positive(),
   amountDue: z.number().nonnegative(),
   amountPaid: z.number().nonnegative(),
-  dueDate: z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
-  paymentDate: z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
+  dueDate: z
+    .string()
+    .refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
+  paymentDate: z
+    .string()
+    .refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
   paymentStatus: z.union([
     z.literal("Pending"),
     z.literal("Paid"),
@@ -196,7 +212,10 @@ async function main() {
   const tenants = loadJson<TenantRecord>("tenant.json", tenantSchema);
   const properties = loadJson<PropertyRecord>("property.json", propertySchema);
   const leases = loadJson<LeaseRecord>("lease.json", leaseSchema);
-  const applications = loadJson<ApplicationRecord>("application.json", applicationSchema);
+  const applications = loadJson<ApplicationRecord>(
+    "application.json",
+    applicationSchema
+  );
   const payments = loadJson<PaymentRecord>("payment.json", paymentSchema);
 
   // 2) Wipe out everything in reverse‐dependency order
@@ -311,7 +330,9 @@ async function main() {
       if (validAmenities.includes(a as Amenity)) {
         filteredAmenities.push(a as Amenity);
       } else {
-        console.warn(`Property ID ${p.id} – invalid amenity value "${a}" (will be dropped).`);
+        console.warn(
+          `Property ID ${p.id} – invalid amenity value "${a}" (will be dropped).`
+        );
       }
     }
 
@@ -321,7 +342,9 @@ async function main() {
       if (validHighlights.includes(h as Highlight)) {
         filteredHighlights.push(h as Highlight);
       } else {
-        console.warn(`Property ID ${p.id} – invalid highlight value "${h}" (will be dropped).`);
+        console.warn(
+          `Property ID ${p.id} – invalid highlight value "${h}" (will be dropped).`
+        );
       }
     }
 
@@ -360,8 +383,13 @@ async function main() {
   console.log("✅ Properties done.");
 
   // f) Print all inserted property IDs for debugging
-  const allProperties = await prisma.property.findMany({ select: { id: true } });
-  console.log("→ Inserted property IDs:", allProperties.map((x) => x.id).join(", "));
+  const allProperties = await prisma.property.findMany({
+    select: { id: true },
+  });
+  console.log(
+    "→ Inserted property IDs:",
+    allProperties.map((x) => x.id).join(", ")
+  );
 
   // 8) Seed Leases
   console.log(`\n🔑 Seeding ${leases.length} leases…`);
@@ -371,7 +399,9 @@ async function main() {
       where: { id: l.propertyId },
     });
     if (!propertyExists) {
-      console.warn(`Skipping lease ID ${l.id}: propertyId=${l.propertyId} not found.`);
+      console.warn(
+        `Skipping lease ID ${l.id}: propertyId=${l.propertyId} not found.`
+      );
       continue;
     }
 
@@ -380,7 +410,9 @@ async function main() {
       where: { cognitoId: l.tenantCognitoId },
     });
     if (!tenantExists) {
-      console.warn(`Skipping lease ID ${l.id}: tenantCognitoId="${l.tenantCognitoId}" not found.`);
+      console.warn(
+        `Skipping lease ID ${l.id}: tenantCognitoId="${l.tenantCognitoId}" not found.`
+      );
       continue;
     }
 
@@ -438,7 +470,9 @@ async function main() {
       where: { id: p.leaseId },
     });
     if (!leaseExists) {
-      console.warn(`Skipping payment ID ${p.id}: leaseId=${p.leaseId} not found.`);
+      console.warn(
+        `Skipping payment ID ${p.id}: leaseId=${p.leaseId} not found.`
+      );
       continue;
     }
     try {

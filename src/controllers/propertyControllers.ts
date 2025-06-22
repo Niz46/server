@@ -24,7 +24,10 @@ const s3Client = new S3Client({
  *   squareFeetMin, squareFeetMax, amenities, availableFrom, latitude, longitude
  * - Returns a JSON array of all properties matching the filters.
  */
-export const getProperties = async (req: Request, res: Response): Promise<void> => {
+export const getProperties = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const {
       favoriteIds,
@@ -177,7 +180,10 @@ export const getProperties = async (req: Request, res: Response): Promise<void> 
  * GET /properties/:id
  * - Returns a single property by its ID, including its Location (with GeoJSON coords).
  */
-export const getProperty = async (req: Request, res: Response): Promise<void> => {
+export const getProperty = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { id } = req.params;
     const propertyId = Number(id);
@@ -198,9 +204,7 @@ export const getProperty = async (req: Request, res: Response): Promise<void> =>
     }
 
     // Fetch WKT from Location, convert to GeoJSON
-    const coordsResult = (await prisma.$queryRaw<
-      { coordinates: string }[]
-    >`
+    const coordsResult = (await prisma.$queryRaw<{ coordinates: string }[]>`
       SELECT ST_AsText(coordinates) AS coordinates
       FROM "Location"
       WHERE id = ${property.location.id}
@@ -227,7 +231,9 @@ export const getProperty = async (req: Request, res: Response): Promise<void> =>
     res.status(200).json(propertyWithCoords);
   } catch (error: any) {
     console.error("Error retrieving property:", error);
-    res.status(500).json({ message: `Error retrieving property: ${error.message}` });
+    res
+      .status(500)
+      .json({ message: `Error retrieving property: ${error.message}` });
   }
 };
 
@@ -238,7 +244,10 @@ export const getProperty = async (req: Request, res: Response): Promise<void> =>
  *     • address, city, state, country, postalCode, managerCognitoId, pricePerMonth, securityDeposit, etc.
  *     • photos[] (one or more image files)
  */
-export const createProperty = async (req: Request, res: Response): Promise<void> => {
+export const createProperty = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const files = req.files as Express.Multer.File[];
     const {
@@ -252,14 +261,16 @@ export const createProperty = async (req: Request, res: Response): Promise<void>
     } = req.body;
 
     // 1) Geocode via Nominatim
-    const geocodeURL = `https://nominatim.openstreetmap.org/search?${new URLSearchParams({
-      street: address,
-      city,
-      country,
-      postalcode: postalCode,
-      format: "json",
-      limit: "1",
-    }).toString()}`;
+    const geocodeURL = `https://nominatim.openstreetmap.org/search?${new URLSearchParams(
+      {
+        street: address,
+        city,
+        country,
+        postalcode: postalCode,
+        format: "json",
+        limit: "1",
+      }
+    ).toString()}`;
 
     const geoResp = await axios.get(geocodeURL, {
       headers: { "User-Agent": "RealEstateApp (you@example.com)" },
@@ -346,7 +357,9 @@ export const createProperty = async (req: Request, res: Response): Promise<void>
     res.status(201).json(newProperty);
   } catch (error: any) {
     console.error("Error creating property:", error);
-    res.status(500).json({ message: `Error creating property: ${error.message}` });
+    res
+      .status(500)
+      .json({ message: `Error creating property: ${error.message}` });
   }
 };
 
@@ -355,7 +368,10 @@ export const createProperty = async (req: Request, res: Response): Promise<void>
  * - Updates an existing Property by ID.
  * - If new photos are included, it re-uploads them to S3 and appends their URLs.
  */
-export const updateProperty = async (req: Request, res: Response): Promise<void> => {
+export const updateProperty = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { id } = req.params;
     const propertyId = Number(id);
@@ -366,7 +382,9 @@ export const updateProperty = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const existing = await prisma.property.findUnique({ where: { id: propertyId } });
+    const existing = await prisma.property.findUnique({
+      where: { id: propertyId },
+    });
     if (!existing) {
       res.status(404).json({ message: "Property not found." });
       return;
@@ -449,7 +467,9 @@ export const updateProperty = async (req: Request, res: Response): Promise<void>
     res.status(200).json(result);
   } catch (error: any) {
     console.error("Error updating property:", error);
-    res.status(500).json({ message: `Error updating property: ${error.message}` });
+    res
+      .status(500)
+      .json({ message: `Error updating property: ${error.message}` });
   }
 };
 
@@ -457,7 +477,10 @@ export const updateProperty = async (req: Request, res: Response): Promise<void>
  * DELETE /properties/:id
  * - Deletes a property by its ID.
  */
-export const deleteProperty = async (req: Request, res: Response): Promise<void> => {
+export const deleteProperty = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { id } = req.params;
     const propertyId = Number(id);
@@ -467,7 +490,9 @@ export const deleteProperty = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const existing = await prisma.property.findUnique({ where: { id: propertyId } });
+    const existing = await prisma.property.findUnique({
+      where: { id: propertyId },
+    });
     if (!existing) {
       res.status(404).json({ message: "Property not found." });
       return;
@@ -477,6 +502,8 @@ export const deleteProperty = async (req: Request, res: Response): Promise<void>
     res.status(204).send();
   } catch (error: any) {
     console.error("Error deleting property:", error);
-    res.status(500).json({ message: `Error deleting property: ${error.message}` });
+    res
+      .status(500)
+      .json({ message: `Error deleting property: ${error.message}` });
   }
 };

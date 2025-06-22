@@ -1,7 +1,7 @@
 // server/src/controllers/notificationControllers.ts
-import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { sendEmail } from '../lib/emailService';
+import { Request, Response, NextFunction } from "express";
+import { PrismaClient } from "@prisma/client";
+import { sendEmail } from "../lib/emailService";
 
 const prisma = new PrismaClient();
 
@@ -27,7 +27,7 @@ export const sendEmailToAll = async (
     );
     res.status(200).json({ success: true });
   } catch (err: any) {
-    console.error('sendEmailToAll error:', err);
+    console.error("sendEmailToAll error:", err);
     next(err);
   }
 };
@@ -45,7 +45,7 @@ export const sendEmailToUser = async (
     await sendEmail({ to: email, subject, text: message });
     res.status(200).json({ success: true });
   } catch (err: any) {
-    console.error('sendEmailToUser error:', err);
+    console.error("sendEmailToUser error:", err);
     next(err);
   }
 };

@@ -11,7 +11,7 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
  */
 const authMiddleware = (allowedRoles) => {
     // normalize once
-    const roles = allowedRoles.map(r => r.toLowerCase());
+    const roles = allowedRoles.map((r) => r.toLowerCase());
     return (req, res, next) => {
         const authHeader = req.headers.authorization;
         if (!authHeader) {

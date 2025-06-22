@@ -18,7 +18,9 @@ export const getLeases = async (req: Request, res: Response): Promise<void> => {
     res.status(200).json(leases);
   } catch (error: any) {
     console.error("Error retrieving leases:", error);
-    res.status(500).json({ message: "Internal server error retrieving leases." });
+    res
+      .status(500)
+      .json({ message: "Internal server error retrieving leases." });
   }
 };
 
@@ -40,7 +42,9 @@ export const getLeasePayments = async (
     res.status(200).json(payments);
   } catch (error: any) {
     console.error("Error retrieving lease payments:", error);
-    res.status(500).json({ message: "Internal server error retrieving lease payments." });
+    res
+      .status(500)
+      .json({ message: "Internal server error retrieving lease payments." });
   }
 };
 
@@ -112,10 +116,7 @@ export const downloadAgreement = async (
     doc.pipe(res);
 
     // Header
-    doc
-      .fontSize(18)
-      .text("Lease Agreement", { align: "center" })
-      .moveDown();
+    doc.fontSize(18).text("Lease Agreement", { align: "center" }).moveDown();
 
     // Lease info
     doc
@@ -131,8 +132,9 @@ export const downloadAgreement = async (
     doc
       .text(
         "This Lease Agreement is entered into between the Manager and the Tenant. " +
-        "The Manager agrees to lease the property to the Tenant under the following terms and conditions..."
-      , { align: "justify" })
+          "The Manager agrees to lease the property to the Tenant under the following terms and conditions...",
+        { align: "justify" }
+      )
       .moveDown();
 
     // Signature lines

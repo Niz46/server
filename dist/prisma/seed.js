@@ -55,7 +55,9 @@ const propertySchema = zod_1.z.object({
     baths: zod_1.z.number().nonnegative(),
     squareFeet: zod_1.z.number().int().nonnegative(),
     propertyType: zod_1.z.string(),
-    postedDate: zod_1.z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
+    postedDate: zod_1.z
+        .string()
+        .refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
     averageRating: zod_1.z.number().optional(),
     numberOfReviews: zod_1.z.number().optional(),
     locationId: zod_1.z.number().int().positive(),
@@ -63,8 +65,12 @@ const propertySchema = zod_1.z.object({
 });
 const leaseSchema = zod_1.z.object({
     id: zod_1.z.number().int().positive(),
-    startDate: zod_1.z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
-    endDate: zod_1.z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
+    startDate: zod_1.z
+        .string()
+        .refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
+    endDate: zod_1.z
+        .string()
+        .refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
     rent: zod_1.z.number().nonnegative(),
     deposit: zod_1.z.number().nonnegative(),
     propertyId: zod_1.z.number().int().positive(),
@@ -72,8 +78,14 @@ const leaseSchema = zod_1.z.object({
 });
 const applicationSchema = zod_1.z.object({
     id: zod_1.z.number().int().positive(),
-    applicationDate: zod_1.z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
-    status: zod_1.z.union([zod_1.z.literal("Pending"), zod_1.z.literal("Denied"), zod_1.z.literal("Approved")]),
+    applicationDate: zod_1.z
+        .string()
+        .refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
+    status: zod_1.z.union([
+        zod_1.z.literal("Pending"),
+        zod_1.z.literal("Denied"),
+        zod_1.z.literal("Approved"),
+    ]),
     propertyId: zod_1.z.number().int().positive(),
     tenantCognitoId: zod_1.z.string().min(1),
     name: zod_1.z.string(),
@@ -86,8 +98,12 @@ const paymentSchema = zod_1.z.object({
     id: zod_1.z.number().int().positive(),
     amountDue: zod_1.z.number().nonnegative(),
     amountPaid: zod_1.z.number().nonnegative(),
-    dueDate: zod_1.z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
-    paymentDate: zod_1.z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
+    dueDate: zod_1.z
+        .string()
+        .refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
+    paymentDate: zod_1.z
+        .string()
+        .refine((s) => !isNaN(Date.parse(s)), { message: "Invalid ISO date" }),
     paymentStatus: zod_1.z.union([
         zod_1.z.literal("Pending"),
         zod_1.z.literal("Paid"),
@@ -318,6 +334,7 @@ function main() {
                     data: {
                         id: p.id,
                         name: p.name,
+                        address: locationExists.address,
                         description: p.description,
                         pricePerMonth: p.pricePerMonth,
                         securityDeposit: p.securityDeposit,
@@ -346,7 +363,9 @@ function main() {
         yield resetSequence("Property");
         console.log("✅ Properties done.");
         // f) Print all inserted property IDs for debugging
-        const allProperties = yield prisma.property.findMany({ select: { id: true } });
+        const allProperties = yield prisma.property.findMany({
+            select: { id: true },
+        });
         console.log("→ Inserted property IDs:", allProperties.map((x) => x.id).join(", "));
         // 8) Seed Leases
         console.log(`\n🔑 Seeding ${leases.length} leases…`);

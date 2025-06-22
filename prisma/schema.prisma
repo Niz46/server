@@ -176,7 +176,7 @@ model Lease {
   deposit         Float
   propertyId      Int
   tenantCognitoId String
-  agreementPath  String?
+  agreementPath   String?
 
   property    Property     @relation(fields: [propertyId], references: [id])
   tenant      Tenant       @relation(fields: [tenantCognitoId], references: [cognitoId])
@@ -192,7 +192,7 @@ model Payment {
   paymentDate   DateTime
   paymentStatus PaymentStatus
   leaseId       Int
-  receiptPath String?
+  receiptPath   String?
 
   lease Lease @relation(fields: [leaseId], references: [id])
 }

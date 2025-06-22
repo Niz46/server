@@ -23,7 +23,7 @@ declare global {
  */
 export const authMiddleware = (allowedRoles: string[]) => {
   // normalize once
-  const roles = allowedRoles.map(r => r.toLowerCase());
+  const roles = allowedRoles.map((r) => r.toLowerCase());
 
   return (req: Request, res: Response, next: NextFunction): void => {
     const authHeader = req.headers.authorization;

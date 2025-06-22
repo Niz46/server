@@ -1,5 +1,5 @@
 "use strict";
-// File: server/src/controllers/paymentControllers.ts
+// server/src/controllers/paymentControllers.ts
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -16,16 +16,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.downloadReceipt = exports.getPaymentsByTenant = exports.createPayment = void 0;
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const client_1 = require("@prisma/client");
-const path_1 = __importDefault(require("path"));
-const fs_1 = __importDefault(require("fs"));
-const promises_1 = require("stream/promises");
 const prisma = new client_1.PrismaClient();
-const RECEIPTS_DIR = path_1.default.join(__dirname, "../../receipts");
-if (!fs_1.default.existsSync(RECEIPTS_DIR))
-    fs_1.default.mkdirSync(RECEIPTS_DIR, { recursive: true });
 /**
  * POST /payments
- * Creates a new payment record tied to a given lease, then generates and stores a PDF receipt.
+ * Creates a new payment record tied to a given lease.
  * Only tenants may call this endpoint.
  */
 const createPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -40,12 +34,10 @@ const createPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         }
         // Determine paymentStatus
         let paymentStatus = "Pending";
-        if (amountPaid >= amountDue) {
+        if (amountPaid >= amountDue)
             paymentStatus = "Paid";
-        }
-        else if (amountPaid > 0) {
+        else if (amountPaid > 0)
             paymentStatus = "PartiallyPaid";
-        }
         // Create the payment record
         const newPayment = yield prisma.payment.create({
             data: {
@@ -57,42 +49,8 @@ const createPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                 paymentStatus,
             },
         });
-        // --- PDF generation ---
-        const receiptFilename = `receipt-${newPayment.id}.pdf`;
-        const receiptPath = path_1.default.join(RECEIPTS_DIR, receiptFilename);
-        const doc = new pdfkit_1.default({ size: "A4", margin: 50 });
-        const writeStream = fs_1.default.createWriteStream(receiptPath);
-        doc.pipe(writeStream);
-        doc
-            .fontSize(20)
-            .text("Payment Receipt", { align: "center" })
-            .moveDown(2)
-            .fontSize(12)
-            .text(`Receipt #: ${newPayment.id}`)
-            .text(`Date Paid: ${new Date(newPayment.paymentDate).toLocaleDateString()}`)
-            .text(`Lease ID: ${newPayment.leaseId}`)
-            .text(`Amount Due: $${newPayment.amountDue.toFixed(2)}`)
-            .text(`Amount Paid: $${newPayment.amountPaid.toFixed(2)}`)
-            .text(`Status: ${newPayment.paymentStatus}`)
-            .moveDown()
-            .text("Thank you for your payment.", { align: "center" });
-        doc.end();
-        try {
-            // Wait until PDF is fully written
-            yield (0, promises_1.pipeline)(doc, writeStream);
-            // Update DB with receipt path
-            yield prisma.payment.update({
-                where: { id: newPayment.id },
-                data: { receiptPath },
-            });
-            // Return full record including path
-            res.status(201).json(Object.assign(Object.assign({}, newPayment), { receiptPath }));
-        }
-        catch (pdfErr) {
-            console.error("PDF generation failed:", pdfErr);
-            // Even if PDF fails, return the payment record
-            res.status(201).json(newPayment);
-        }
+        // Return the created payment immediately (receipt will be generated on GET)
+        res.status(201).json(newPayment);
     }
     catch (error) {
         console.error("Error creating payment:", error);
@@ -125,26 +83,53 @@ const getPaymentsByTenant = (req, res) => __awaiter(void 0, void 0, void 0, func
 exports.getPaymentsByTenant = getPaymentsByTenant;
 /**
  * GET /payments/:id/receipt
- * Streams the PDF receipt for a given payment ID.
+ * Streams a dynamically-generated PDF receipt for a given payment ID.
  */
 const downloadReceipt = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const paymentId = Number(req.params.id);
         const payment = yield prisma.payment.findUnique({
             where: { id: paymentId },
-            select: { receiptPath: true },
+            include: {
+                lease: {
+                    include: { property: true, tenant: true },
+                },
+            },
         });
-        if (!(payment === null || payment === void 0 ? void 0 : payment.receiptPath) || !fs_1.default.existsSync(payment.receiptPath)) {
-            res.status(404).json({ error: "Receipt not found" });
+        if (!payment) {
+            res.status(404).json({ error: "Payment not found." });
             return;
         }
+        // Set headers for PDF download
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename=receipt_${paymentId}.pdf`);
-        fs_1.default.createReadStream(payment.receiptPath).pipe(res);
+        // Generate PDF in-memory and pipe to response
+        const doc = new pdfkit_1.default({ size: "A4", margin: 50 });
+        doc.pipe(res);
+        doc
+            .fontSize(20)
+            .text("Payment Receipt", { align: "center" })
+            .moveDown(2)
+            .fontSize(12)
+            .text(`Receipt #: ${payment.id}`)
+            .text(`Date Paid: ${payment.paymentDate.toLocaleDateString("en-US")}`)
+            .text(`Lease ID: ${payment.leaseId}`)
+            .text(`Amount Due: $${payment.amountDue.toFixed(2)}`)
+            .text(`Amount Paid: $${payment.amountPaid.toFixed(2)}`)
+            .text(`Status: ${payment.paymentStatus}`)
+            .moveDown()
+            .text("Thank you for your payment.", { align: "center" });
+        doc.end();
     }
     catch (err) {
-        console.error("Error in downloadReceipt:", err);
-        res.status(500).json({ error: "Server error" });
+        console.error("Error streaming receipt:", err);
+        // If streaming fails mid-PDF, we can’t send JSON, so just close connection
+        if (!res.headersSent) {
+            res.status(500).json({ error: "Server error generating receipt." });
+        }
+        else {
+            res.end();
+        }
     }
 });
 exports.downloadReceipt = downloadReceipt;

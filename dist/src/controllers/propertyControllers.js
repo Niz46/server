@@ -204,7 +204,9 @@ const getProperty = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     }
     catch (error) {
         console.error("Error retrieving property:", error);
-        res.status(500).json({ message: `Error retrieving property: ${error.message}` });
+        res
+            .status(500)
+            .json({ message: `Error retrieving property: ${error.message}` });
     }
 });
 exports.getProperty = getProperty;
@@ -293,7 +295,9 @@ const createProperty = (req, res) => __awaiter(void 0, void 0, void 0, function*
     }
     catch (error) {
         console.error("Error creating property:", error);
-        res.status(500).json({ message: `Error creating property: ${error.message}` });
+        res
+            .status(500)
+            .json({ message: `Error creating property: ${error.message}` });
     }
 });
 exports.createProperty = createProperty;
@@ -311,7 +315,9 @@ const updateProperty = (req, res) => __awaiter(void 0, void 0, void 0, function*
             res.status(400).json({ message: "Invalid property ID." });
             return;
         }
-        const existing = yield prisma.property.findUnique({ where: { id: propertyId } });
+        const existing = yield prisma.property.findUnique({
+            where: { id: propertyId },
+        });
         if (!existing) {
             res.status(404).json({ message: "Property not found." });
             return;
@@ -388,7 +394,9 @@ const updateProperty = (req, res) => __awaiter(void 0, void 0, void 0, function*
     }
     catch (error) {
         console.error("Error updating property:", error);
-        res.status(500).json({ message: `Error updating property: ${error.message}` });
+        res
+            .status(500)
+            .json({ message: `Error updating property: ${error.message}` });
     }
 });
 exports.updateProperty = updateProperty;
@@ -404,7 +412,9 @@ const deleteProperty = (req, res) => __awaiter(void 0, void 0, void 0, function*
             res.status(400).json({ message: "Invalid property ID." });
             return;
         }
-        const existing = yield prisma.property.findUnique({ where: { id: propertyId } });
+        const existing = yield prisma.property.findUnique({
+            where: { id: propertyId },
+        });
         if (!existing) {
             res.status(404).json({ message: "Property not found." });
             return;
@@ -414,7 +424,9 @@ const deleteProperty = (req, res) => __awaiter(void 0, void 0, void 0, function*
     }
     catch (error) {
         console.error("Error deleting property:", error);
-        res.status(500).json({ message: `Error deleting property: ${error.message}` });
+        res
+            .status(500)
+            .json({ message: `Error deleting property: ${error.message}` });
     }
 });
 exports.deleteProperty = deleteProperty;

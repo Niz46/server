@@ -28,7 +28,7 @@ const sendEmailToAll = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
         res.status(200).json({ success: true });
     }
     catch (err) {
-        console.error('sendEmailToAll error:', err);
+        console.error("sendEmailToAll error:", err);
         next(err);
     }
 });
@@ -43,7 +43,7 @@ const sendEmailToUser = (req, res, next) => __awaiter(void 0, void 0, void 0, fu
         res.status(200).json({ success: true });
     }
     catch (err) {
-        console.error('sendEmailToUser error:', err);
+        console.error("sendEmailToUser error:", err);
         next(err);
     }
 });

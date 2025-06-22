@@ -16,13 +16,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.downloadAgreement = exports.getLeasesByPropertyId = exports.getLeasePayments = exports.getLeases = void 0;
 const client_1 = require("@prisma/client");
 const pdfkit_1 = __importDefault(require("pdfkit"));
-const path_1 = __importDefault(require("path"));
-const fs_1 = __importDefault(require("fs"));
-const promises_1 = require("stream/promises");
 const prisma = new client_1.PrismaClient();
-const AGREEMENTS_DIR = path_1.default.join(__dirname, "../../agreements");
-if (!fs_1.default.existsSync(AGREEMENTS_DIR))
-    fs_1.default.mkdirSync(AGREEMENTS_DIR, { recursive: true });
 /**
  * GET /leases
  * Returns all leases (with tenant + property included).
@@ -91,48 +85,69 @@ const getLeasesByPropertyId = (req, res) => __awaiter(void 0, void 0, void 0, fu
 exports.getLeasesByPropertyId = getLeasesByPropertyId;
 /**
  * GET /leases/:id/agreement
- * Generates (if needed) and streams the lease agreement PDF.
+ * Dynamically generates and streams a lease agreement PDF.
  */
 const downloadAgreement = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const leaseId = Number(req.params.id);
-        const leaseRecord = yield prisma.lease.findUnique({
-            where: { id: leaseId },
-            select: { agreementPath: true },
-        });
-        let agreementPath = leaseRecord === null || leaseRecord === void 0 ? void 0 : leaseRecord.agreementPath;
-        // If not generated yet, create it
-        if (!agreementPath || !fs_1.default.existsSync(agreementPath)) {
-            agreementPath = path_1.default.join(AGREEMENTS_DIR, `lease-${leaseId}.pdf`);
-            const doc = new pdfkit_1.default({ size: "A4", margin: 50 });
-            const ws = fs_1.default.createWriteStream(agreementPath);
-            doc.pipe(ws);
-            doc
-                .fontSize(18)
-                .text("Lease Agreement", { align: "center" })
-                .moveDown()
-                .fontSize(12)
-                .text(`Lease ID: ${leaseId}`)
-                .text(`Date: ${new Date().toLocaleDateString()}`)
-                .moveDown()
-                .text("This lease agreement is between the property manager and the tenant...", {
-                align: "justify",
-            });
-            doc.end();
-            yield (0, promises_1.pipeline)(doc, ws);
-            yield prisma.lease.update({
-                where: { id: leaseId },
-                data: { agreementPath },
-            });
+        if (isNaN(leaseId)) {
+            res.status(400).json({ error: "Invalid lease ID." });
+            return;
         }
-        // Stream it back
+        // Fetch lease details (including tenant and property if needed)
+        const lease = yield prisma.lease.findUnique({
+            where: { id: leaseId },
+            include: {
+                tenant: true,
+                property: true,
+            },
+        });
+        if (!lease) {
+            res.status(404).json({ error: "Lease not found." });
+            return;
+        }
+        // Set headers for PDF download
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename=lease_agreement_${leaseId}.pdf`);
-        fs_1.default.createReadStream(agreementPath).pipe(res);
+        // Stream PDF directly
+        const doc = new pdfkit_1.default({ size: "A4", margin: 50 });
+        doc.pipe(res);
+        // Header
+        doc.fontSize(18).text("Lease Agreement", { align: "center" }).moveDown();
+        // Lease info
+        doc
+            .fontSize(12)
+            .text(`Lease ID: ${lease.id}`)
+            .text(`Property: ${lease.property.address || lease.property.name}`)
+            .text(`Tenant: ${lease.tenant.name} (${lease.tenant.cognitoId})`)
+            .text(`Start Date: ${lease.startDate.toLocaleDateString()}`)
+            .text(`End Date: ${lease.endDate.toLocaleDateString()}`)
+            .moveDown();
+        // Body placeholder
+        doc
+            .text("This Lease Agreement is entered into between the Manager and the Tenant. " +
+            "The Manager agrees to lease the property to the Tenant under the following terms and conditions...", { align: "justify" })
+            .moveDown();
+        // Signature lines
+        doc
+            .moveDown(2)
+            .text("__________________________", { continued: true })
+            .text("    ")
+            .text("__________________________")
+            .text("   Manager Signature", { continued: true })
+            .text("    ")
+            .text("Tenant Signature");
+        doc.end();
     }
     catch (err) {
-        console.error("Error in downloadAgreement:", err);
-        res.status(500).json({ error: "Server error downloading agreement." });
+        console.error("Error streaming agreement:", err);
+        // If headers already sent, just end; otherwise send JSON
+        if (!res.headersSent) {
+            res.status(500).json({ error: "Server error generating agreement." });
+        }
+        else {
+            res.end();
+        }
     }
 });
 exports.downloadAgreement = downloadAgreement;

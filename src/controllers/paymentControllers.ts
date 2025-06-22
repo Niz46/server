@@ -17,7 +17,9 @@ export const createPayment = async (
 ): Promise<void> => {
   try {
     const { leaseId, amountDue, amountPaid, dueDate, paymentDate } = req.body;
-    const lease = await prisma.lease.findUnique({ where: { id: Number(leaseId) } });
+    const lease = await prisma.lease.findUnique({
+      where: { id: Number(leaseId) },
+    });
     if (!lease) {
       res.status(400).json({ message: "Invalid leaseId." });
       return;
@@ -44,7 +46,31 @@ export const createPayment = async (
     res.status(201).json(newPayment);
   } catch (error: any) {
     console.error("Error creating payment:", error);
-    res.status(500).json({ message: "Internal server error creating payment." });
+    res
+      .status(500)
+      .json({ message: "Internal server error creating payment." });
+  }
+};
+/**
+ * GET /payments/tenant/:tenantCognitoId
+ * Returns all payments (with lease info) for a given tenantCognitoId.
+ */
+export const getPaymentsByTenant = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { tenantCognitoId } = req.params;
+    const payments = await prisma.payment.findMany({
+      where: { lease: { tenantCognitoId } },
+      include: { lease: { include: { property: true } } },
+    });
+    res.status(200).json(payments);
+  } catch (error: any) {
+    console.error("Error retrieving tenant payments:", error);
+    res
+      .status(500)
+      .json({ message: "Internal server error retrieving tenant payments." });
   }
 };
 
@@ -89,9 +115,7 @@ export const downloadReceipt = async (
       .moveDown(2)
       .fontSize(12)
       .text(`Receipt #: ${payment.id}`)
-      .text(
-        `Date Paid: ${payment.paymentDate.toLocaleDateString("en-US")}`
-      )
+      .text(`Date Paid: ${payment.paymentDate.toLocaleDateString("en-US")}`)
       .text(`Lease ID: ${payment.leaseId}`)
       .text(`Amount Due: $${payment.amountDue.toFixed(2)}`)
       .text(`Amount Paid: $${payment.amountPaid.toFixed(2)}`)
