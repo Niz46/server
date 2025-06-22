@@ -95,11 +95,7 @@ export const downloadAgreement = async (
       where: { id: leaseId },
       include: {
         tenant: true,
-        property: {
-          include: {
-            location: true, // Include property location details
-          }
-        },
+        property: true, // Include property details if needed
       },
     });
 
@@ -126,7 +122,7 @@ export const downloadAgreement = async (
     doc
       .fontSize(12)
       .text(`Lease ID: ${lease.id}`)
-      .text(`Property: ${lease.property.location.address}`)
+      .text(`Property: ${lease.property.name} (${lease.property.id})`)
       .text(`Tenant: ${lease.tenant.name} (${lease.tenant.cognitoId})`)
       .text(`Start Date: ${lease.startDate.toLocaleDateString()}`)
       .text(`End Date: ${lease.endDate.toLocaleDateString()}`)

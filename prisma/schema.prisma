@@ -88,7 +88,6 @@ enum PaymentStatus {
 model Property {
   id                Int          @id @default(autoincrement())
   name              String
-  address           String
   description       String
   pricePerMonth     Float
   securityDeposit   Float

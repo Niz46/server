@@ -20,7 +20,6 @@ CREATE TYPE "PaymentStatus" AS ENUM ('Pending', 'Paid', 'PartiallyPaid', 'Overdu
 CREATE TABLE "Property" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
-    "address" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "pricePerMonth" DOUBLE PRECISION NOT NULL,
     "securityDeposit" DOUBLE PRECISION NOT NULL,
