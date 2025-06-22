@@ -99,7 +99,11 @@ const downloadAgreement = (req, res) => __awaiter(void 0, void 0, void 0, functi
             where: { id: leaseId },
             include: {
                 tenant: true,
-                property: true,
+                property: {
+                    include: {
+                        location: true, // Include property location details
+                    }
+                },
             },
         });
         if (!lease) {
@@ -118,7 +122,7 @@ const downloadAgreement = (req, res) => __awaiter(void 0, void 0, void 0, functi
         doc
             .fontSize(12)
             .text(`Lease ID: ${lease.id}`)
-            .text(`Property: ${lease.property.address || lease.property.name}`)
+            .text(`Property: ${lease.property.location.address}`)
             .text(`Tenant: ${lease.tenant.name} (${lease.tenant.cognitoId})`)
             .text(`Start Date: ${lease.startDate.toLocaleDateString()}`)
             .text(`End Date: ${lease.endDate.toLocaleDateString()}`)
