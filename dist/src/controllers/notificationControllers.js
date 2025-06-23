@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendEmailToUser = exports.sendEmailToAll = void 0;
+exports.getUserAlerts = exports.getUserMessages = exports.sendEmailToUser = exports.sendEmailToAll = void 0;
 const client_1 = require("@prisma/client");
 const emailService_1 = require("../lib/emailService");
 const prisma = new client_1.PrismaClient();
@@ -48,3 +48,27 @@ const sendEmailToUser = (req, res, next) => __awaiter(void 0, void 0, void 0, fu
     }
 });
 exports.sendEmailToUser = sendEmailToUser;
+/**
+ * GET /notifications/messages
+ * Returns messages for the current user.
+ */
+const getUserMessages = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const userId = req.user.id;
+    const msgs = yield prisma.notification.findMany({
+        where: { userId, type: "message" },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+    });
+    res.json(msgs);
+});
+exports.getUserMessages = getUserMessages;
+const getUserAlerts = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const userId = req.user.id;
+    const alerts = yield prisma.notification.findMany({
+        where: { userId, type: "alert" },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+    });
+    res.json(alerts);
+});
+exports.getUserAlerts = getUserAlerts;

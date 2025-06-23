@@ -13,7 +13,8 @@ import propertyRoutes from './routes/propertyRoutes';
 import leaseRoutes from './routes/leaseRoutes';
 import applicationRoutes from './routes/applicationRoutes';
 import paymentRoutes from './routes/paymentRoutes';
-import notificationRouter from './routes/notificationRoutes';
+import notificationRouter from './routes/emailNotificationRoutes';
+import inAppNotificationRoutes from './routes/inAppNotificationRoutes';
 import { authMiddleware } from './middleware/authMiddleware';
 
 // Create Express app
@@ -76,6 +77,7 @@ app.get('/', (_req: Request, res: Response) => {
 
 app.use('/applications', applicationRoutes);
 app.use('/notifications/email', notificationRouter);
+app.use("/notifications", inAppNotificationRoutes);
 app.use('/properties', propertyRoutes);
 app.use('/leases', leaseRoutes);
 app.use('/payments', paymentRoutes);

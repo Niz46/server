@@ -16,7 +16,8 @@ const propertyRoutes_1 = __importDefault(require("./routes/propertyRoutes"));
 const leaseRoutes_1 = __importDefault(require("./routes/leaseRoutes"));
 const applicationRoutes_1 = __importDefault(require("./routes/applicationRoutes"));
 const paymentRoutes_1 = __importDefault(require("./routes/paymentRoutes"));
-const notificationRoutes_1 = __importDefault(require("./routes/notificationRoutes"));
+const emailNotificationRoutes_1 = __importDefault(require("./routes/emailNotificationRoutes"));
+const inAppNotificationRoutes_1 = __importDefault(require("./routes/inAppNotificationRoutes"));
 const authMiddleware_1 = require("./middleware/authMiddleware");
 // Create Express app
 const app = (0, express_1.default)();
@@ -62,7 +63,8 @@ app.get('/', (_req, res) => {
 });
 // ─── API ROUTES ───────────────────────────────────────────────────────────────
 app.use('/applications', applicationRoutes_1.default);
-app.use('/notifications/email', notificationRoutes_1.default);
+app.use('/notifications/email', emailNotificationRoutes_1.default);
+app.use("/notifications", inAppNotificationRoutes_1.default);
 app.use('/properties', propertyRoutes_1.default);
 app.use('/leases', leaseRoutes_1.default);
 app.use('/payments', paymentRoutes_1.default);

@@ -104,21 +104,93 @@ const downloadReceipt = (req, res) => __awaiter(void 0, void 0, void 0, function
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename=receipt_${paymentId}.pdf`);
         // Generate PDF in-memory and pipe to response
-        const doc = new pdfkit_1.default({ size: "A4", margin: 50 });
+        // inside your downloadReceipt controller
+        const doc = new pdfkit_1.default({
+            size: "A4",
+            margin: 50,
+            pdfVersion: "1.4",
+            info: {
+                Title: "Payment Receipt",
+                Author: "Miles Home Real Estate",
+                Subject: `Receipt for Payment #${payment.id}`,
+            },
+        });
         doc.pipe(res);
+        // ── HEADER ──────────────────────────────────────────────────────────────────────
+        // (If you have a logo, replace the text with:
+        //    doc.image('/path/to/logo.png', { fit:[100,50], align:'left' });
+        // )
         doc
-            .fontSize(20)
-            .text("Payment Receipt", { align: "center" })
-            .moveDown(2)
+            .fontSize(24)
+            .font("Helvetica-Bold")
+            .text("Miles Home Real Estate", { align: "left" });
+        doc
             .fontSize(12)
-            .text(`Receipt #: ${payment.id}`)
-            .text(`Date Paid: ${payment.paymentDate.toLocaleDateString("en-US")}`)
-            .text(`Lease ID: ${payment.leaseId}`)
-            .text(`Amount Due: $${payment.amountDue.toFixed(2)}`)
-            .text(`Amount Paid: $${payment.amountPaid.toFixed(2)}`)
-            .text(`Status: ${payment.paymentStatus}`)
-            .moveDown()
-            .text("Thank you for your payment.", { align: "center" });
+            .font("Helvetica")
+            .text(`Receipt #${payment.id}`, { align: "right" })
+            .text(`Date: ${payment.paymentDate.toLocaleDateString("en-US")}`, {
+            align: "right",
+        })
+            .moveDown(2);
+        // ── BILL TO / CUSTOMER ──────────────────────────────────────────────────────────
+        doc
+            .fontSize(14)
+            .font("Helvetica-Bold")
+            .text("Bill To:", { continued: false })
+            .moveDown(0.5)
+            .fontSize(12)
+            .font("Helvetica")
+            .text(`${payment.lease.tenant.name}`)
+            .text(`${payment.lease.tenant.email}`)
+            .moveDown(1.5);
+        // ── PAYMENT DETAILS TABLE ───────────────────────────────────────────────────────
+        const tableTop = doc.y;
+        const labelX = 50;
+        const valueX = 300;
+        // Column headers
+        doc
+            .fontSize(12)
+            .font("Helvetica-Bold")
+            .text("Description", labelX, tableTop)
+            .text("Amount", valueX, tableTop)
+            .moveDown(0.5);
+        // Horizontal line
+        doc.moveTo(labelX, doc.y).lineTo(550, doc.y).stroke().moveDown(0.5);
+        // Rows
+        const rows = [
+            { desc: "Amount Paid", value: `$${payment.amountPaid.toFixed(2)}` },
+            { desc: "Payment Status", value: payment.paymentStatus },
+        ];
+        rows.forEach((row) => {
+            doc
+                .font("Helvetica")
+                .text(row.desc, labelX, doc.y)
+                .text(row.value, valueX, doc.y, { width: 100, align: "right" })
+                .moveDown(0.5);
+        });
+        // Totals line
+        doc
+            .moveTo(labelX, doc.y + 5)
+            .lineTo(550, doc.y + 5)
+            .stroke()
+            .moveDown(1);
+        // ── THANK YOU & FOOTER ─────────────────────────────────────────────────────────
+        doc
+            .fontSize(12)
+            .font("Helvetica-Oblique")
+            .text("Thank you for your business!", { align: "center" })
+            .moveDown(2);
+        // Signature line
+        doc
+            .font("Helvetica")
+            .text("Miles Home LTD", labelX, doc.y)
+            .text("Authorized Signature", labelX, doc.y + 15)
+            .moveDown(1);
+        // Optional: company contact in footer
+        doc
+            .fontSize(10)
+            .font("Helvetica")
+            .text("Miles Home Real Estate • 123 Main St, Springfield • (144) 026-99164 • milestonesrealstates@gmail.com", 50, 780, { align: "center", width: 500 });
         doc.end();
     }
     catch (err) {

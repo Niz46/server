@@ -49,3 +49,28 @@ export const sendEmailToUser = async (
     next(err);
   }
 };
+
+
+/**
+ * GET /notifications/messages
+ * Returns messages for the current user.
+ */
+export const getUserMessages = async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const msgs = await prisma.notification.findMany({
+    where: { userId, type: "message" },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+  res.json(msgs);
+};
+
+export const getUserAlerts = async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const alerts = await prisma.notification.findMany({
+    where: { userId, type: "alert" },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+  res.json(alerts);
+};
