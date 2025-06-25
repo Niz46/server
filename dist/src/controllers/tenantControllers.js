@@ -17,7 +17,12 @@ const prisma = new client_1.PrismaClient();
 const getAllTenants = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const tenants = yield prisma.tenant.findMany({
-            select: { cognitoId: true, name: true, email: true },
+            select: {
+                cognitoId: true,
+                name: true,
+                email: true,
+                isSuspended: true,
+            },
         });
         res.json(tenants);
     }

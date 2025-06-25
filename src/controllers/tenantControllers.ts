@@ -8,7 +8,12 @@ const prisma = new PrismaClient();
 export const getAllTenants = async (req: Request, res: Response) => {
   try {
     const tenants = await prisma.tenant.findMany({
-      select: { cognitoId: true, name: true, email: true },
+      select: {
+        cognitoId: true,
+        name: true,
+        email: true,
+        isSuspended: true,
+      },
     });
     res.json(tenants);
   } catch (err: any) {
