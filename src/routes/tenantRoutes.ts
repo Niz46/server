@@ -22,7 +22,7 @@ router.get("/:cognitoId", authMiddleware(["tenant","manager"]), getTenant);
 router.post("/", createTenant);
 
 // Tenant-only actions
-router.put("/:cognitoId", authMiddleware(["tenant"]), updateTenant);
+router.put("/:cognitoId", authMiddleware(["tenant", "manager"]), updateTenant);
 
 router.get(
   "/:cognitoId/current-residences",
