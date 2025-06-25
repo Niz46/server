@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.removeFavoriteProperty = exports.addFavoriteProperty = exports.getCurrentResidences = exports.updateTenant = exports.createTenant = exports.getTenant = exports.getAllTenants = void 0;
+exports.removeFavoriteProperty = exports.addFavoriteProperty = exports.getCurrentResidences = exports.suspendTenant = exports.updateTenant = exports.createTenant = exports.getTenant = exports.getAllTenants = void 0;
 const client_1 = require("@prisma/client");
 const wkt_1 = require("@terraformer/wkt");
 const prisma = new client_1.PrismaClient();
@@ -73,19 +73,46 @@ exports.createTenant = createTenant;
 const updateTenant = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { cognitoId } = req.params;
-        const { name, email, phoneNumber, isSuspended } = req.body;
-        const updated = yield prisma.tenant.update({
+        const { name, email, phoneNumber } = req.body;
+        const updateTenant = yield prisma.tenant.update({
             where: { cognitoId },
-            data: Object.assign(Object.assign(Object.assign(Object.assign({}, (name !== undefined && { name })), (email !== undefined && { email })), (phoneNumber !== undefined && { phoneNumber })), (isSuspended !== undefined && { isSuspended })),
+            data: {
+                name,
+                email,
+                phoneNumber,
+            },
         });
-        res.json(updated);
+        res.json(updateTenant);
     }
-    catch (err) {
-        console.error("updateTenant error:", err);
-        res.status(500).json({ message: `Error updating tenant: ${err.message}` });
+    catch (error) {
+        res
+            .status(500)
+            .json({ message: `Error updating tenant: ${error.message}` });
     }
 });
 exports.updateTenant = updateTenant;
+const suspendTenant = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    const { cognitoId } = req.params;
+    const { isSuspended } = req.body;
+    if (typeof isSuspended !== "boolean") {
+        res.status(400).json({ message: "isSuspended must be boolean" });
+        return;
+    }
+    try {
+        const updated = yield prisma.tenant.update({
+            where: { cognitoId },
+            data: { isSuspended },
+            select: { cognitoId: true, isSuspended: true },
+        });
+        // just call res.json, don't return it
+        res.json(updated);
+    }
+    catch (err) {
+        console.error("suspendTenant error:", err);
+        res.status(500).json({ message: err.message });
+    }
+});
+exports.suspendTenant = suspendTenant;
 const getCurrentResidences = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { cognitoId } = req.params;

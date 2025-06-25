@@ -7,6 +7,7 @@ import {
   getCurrentResidences,
   addFavoriteProperty,
   removeFavoriteProperty,
+  suspendTenant,
 } from "../controllers/tenantControllers";
 import { authMiddleware } from "../middleware/authMiddleware";
 
@@ -14,6 +15,7 @@ const router = express.Router();
 
 // Managers only
 router.get("/", authMiddleware(["manager"]), getAllTenants);
+router.put("/:cognitoId/suspend", authMiddleware(["manager"]), suspendTenant);
 
 // Tenant or Manager can view a single tenant
 router.get("/:cognitoId", authMiddleware(["tenant","manager"]), getTenant);
@@ -22,7 +24,7 @@ router.get("/:cognitoId", authMiddleware(["tenant","manager"]), getTenant);
 router.post("/", createTenant);
 
 // Tenant-only actions
-router.put("/:cognitoId", authMiddleware(["tenant", "manager"]), updateTenant);
+router.put("/:cognitoId", authMiddleware(["tenant"]), updateTenant);
 
 router.get(
   "/:cognitoId/current-residences",

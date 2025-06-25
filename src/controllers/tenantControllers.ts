@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { PrismaClient } from "@prisma/client";
 import { wktToGeoJSON } from "@terraformer/wkt";
 
@@ -69,22 +69,50 @@ export const updateTenant = async (
 ): Promise<void> => {
   try {
     const { cognitoId } = req.params;
-    const { name, email, phoneNumber, isSuspended } = req.body;
+    const { name, email, phoneNumber } = req.body;
 
-    const updated = await prisma.tenant.update({
+    const updateTenant = await prisma.tenant.update({
       where: { cognitoId },
       data: {
-        ...(name !== undefined && { name }),
-        ...(email !== undefined && { email }),
-        ...(phoneNumber !== undefined && { phoneNumber }),
-        ...(isSuspended !== undefined && { isSuspended }),
+        name,
+        email,
+        phoneNumber,
       },
     });
 
+    res.json(updateTenant);
+  } catch (error: any) {
+    res
+      .status(500)
+      .json({ message: `Error updating tenant: ${error.message}` });
+  }
+};
+
+export const suspendTenant = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const { cognitoId } = req.params;
+  const { isSuspended } = req.body;
+
+  if (typeof isSuspended !== "boolean") {
+    res.status(400).json({ message: "isSuspended must be boolean" });
+    return;
+  }
+
+  try {
+    const updated = await prisma.tenant.update({
+      where: { cognitoId },
+      data: { isSuspended },
+      select: { cognitoId: true, isSuspended: true },
+    });
+
+    // just call res.json, don't return it
     res.json(updated);
   } catch (err: any) {
-    console.error("updateTenant error:", err);
-    res.status(500).json({ message: `Error updating tenant: ${err.message}` });
+    console.error("suspendTenant error:", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
