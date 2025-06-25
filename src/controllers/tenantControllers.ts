@@ -69,22 +69,22 @@ export const updateTenant = async (
 ): Promise<void> => {
   try {
     const { cognitoId } = req.params;
-    const { name, email, phoneNumber } = req.body;
+    const { name, email, phoneNumber, isSuspended } = req.body;
 
-    const updateTenant = await prisma.tenant.update({
+    const updated = await prisma.tenant.update({
       where: { cognitoId },
       data: {
-        name,
-        email,
-        phoneNumber,
+        ...(name !== undefined && { name }),
+        ...(email !== undefined && { email }),
+        ...(phoneNumber !== undefined && { phoneNumber }),
+        ...(isSuspended !== undefined && { isSuspended }),
       },
     });
 
-    res.json(updateTenant);
-  } catch (error: any) {
-    res
-      .status(500)
-      .json({ message: `Error updating tenant: ${error.message}` });
+    res.json(updated);
+  } catch (err: any) {
+    console.error("updateTenant error:", err);
+    res.status(500).json({ message: `Error updating tenant: ${err.message}` });
   }
 };
 

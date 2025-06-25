@@ -131,6 +131,7 @@ model Tenant {
   name        String
   email       String
   phoneNumber String
+  isSuspended   Boolean   @default(false)
 
   properties   Property[]    @relation("TenantProperties")
   favorites    Property[]    @relation("TenantFavorites")

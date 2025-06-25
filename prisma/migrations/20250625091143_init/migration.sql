@@ -60,6 +60,7 @@ CREATE TABLE "Tenant" (
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "phoneNumber" TEXT NOT NULL,
+    "isSuspended" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "Tenant_pkey" PRIMARY KEY ("id")
 );

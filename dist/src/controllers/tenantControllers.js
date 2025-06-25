@@ -73,21 +73,16 @@ exports.createTenant = createTenant;
 const updateTenant = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { cognitoId } = req.params;
-        const { name, email, phoneNumber } = req.body;
-        const updateTenant = yield prisma.tenant.update({
+        const { name, email, phoneNumber, isSuspended } = req.body;
+        const updated = yield prisma.tenant.update({
             where: { cognitoId },
-            data: {
-                name,
-                email,
-                phoneNumber,
-            },
+            data: Object.assign(Object.assign(Object.assign(Object.assign({}, (name !== undefined && { name })), (email !== undefined && { email })), (phoneNumber !== undefined && { phoneNumber })), (isSuspended !== undefined && { isSuspended })),
         });
-        res.json(updateTenant);
+        res.json(updated);
     }
-    catch (error) {
-        res
-            .status(500)
-            .json({ message: `Error updating tenant: ${error.message}` });
+    catch (err) {
+        console.error("updateTenant error:", err);
+        res.status(500).json({ message: `Error updating tenant: ${err.message}` });
     }
 });
 exports.updateTenant = updateTenant;
