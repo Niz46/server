@@ -44,31 +44,5 @@
     "favorites": {
       "connect": [{ "id": 4 }, { "id": 5 }]
     }
-  },
-  {
-    "id": 5,
-    "cognitoId": "us-east-2:54321098-90ab-cdef-1234-567890abcdef",
-    "name": "Emma Taylor",
-    "email": "emma.taylor@example.com",
-    "phoneNumber": "+1 (555) 999-0000",
-    "properties": {
-      "connect": [{ "id": 2 }, { "id": 9 }]
-    },
-    "favorites": {
-      "connect": [{ "id": 1 }, { "id": 5 }, { "id": 6 }]
-    }
-  },
-  {
-    "id": 7,
-    "cognitoId": "us-east-1:a43824f8-0031-702c-9202-39a38d067e17",
-    "name": "Grace Miller",
-    "email": "grace.miller@example.com",
-    "phoneNumber": "+1 (555) 444-5555",
-    "properties": {
-      "connect": [{ "id": 6 }]
-    },
-    "favorites": {
-      "connect": [{ "id": 3 }, { "id": 7 }]
-    }
   }
 ]
