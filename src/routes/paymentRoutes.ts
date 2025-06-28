@@ -1,25 +1,38 @@
-// File: server/src/routes/paymentRoutes.ts
-
 import express from "express";
-import { authMiddleware } from "../middleware/authMiddleware";
 import {
   createPayment,
-  getPaymentsByTenant, downloadReceipt} from "../controllers/paymentControllers";
+  createDepositRequest,
+  listPendingDeposits,
+  approveDeposit,
+  declineDeposit,
+  withdrawFunds,
+  fundTenant,
+  getPaymentsByTenant,
+  downloadReceipt,
+} from "../controllers/paymentControllers";
+import { authMiddleware } from "../middleware/authMiddleware";
 
 const router = express.Router();
 
-// POST /payments
-//   → Tenant must be logged in to make a payment.
+// Rent / one-off
 router.post("/", authMiddleware(["tenant"]), createPayment);
 
-// GET /payments/tenant/:tenantCognitoId
-//   → Manager or tenant can fetch all payments belonging to that tenant.
-router.get(
-  "/tenant/:tenantCognitoId",
-  authMiddleware(["manager", "tenant"]),
-  getPaymentsByTenant
-);
+// Deposits
+router.post("/deposit-request", authMiddleware(["tenant"]), createDepositRequest);
+router.get("/deposits/pending", authMiddleware(["manager"]), listPendingDeposits);
+router.put("/deposits/:id/approve", authMiddleware(["manager"]), approveDeposit);
+router.put("/deposits/:id/decline", authMiddleware(["manager"]), declineDeposit);
 
-router.get("/:id/receipt", downloadReceipt);
+// Withdrawals
+router.post("/withdraw", authMiddleware(["tenant"]), withdrawFunds);
+
+// Manager tops up
+router.post("/tenants/:cognitoId/fund", authMiddleware(["manager"]), fundTenant);
+
+// Tenant’s history
+router.get("/tenant/:tenantCognitoId", authMiddleware(["tenant","manager"]), getPaymentsByTenant);
+
+// PDF receipt
+router.get("/:id/receipt", authMiddleware(["tenant","manager"]), downloadReceipt);
 
 export default router;

@@ -118,17 +118,32 @@ exports.createApplication = createApplication;
  */
 const updateApplicationStatus = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { id } = req.params;
+        const applicationId = Number(req.params.id);
         const { status } = req.body;
         const app = yield prisma.application.findUnique({
-            where: { id: Number(id) },
+            where: { id: applicationId },
             include: { property: true, tenant: true },
         });
         if (!app) {
             res.status(404).json({ message: "Application not found." });
             return;
         }
+        // If we're approving, try to debit from the tenant's wallet first
         if (status === "Approved") {
+            // 1️⃣ load up‐to‐date tenant record
+            const tenant = yield prisma.tenant.findUnique({
+                where: { cognitoId: app.tenantCognitoId },
+            });
+            // 2️⃣ debit if they have enough balance
+            if (tenant && tenant.balance >= app.property.pricePerMonth) {
+                yield prisma.tenant.update({
+                    where: { cognitoId: tenant.cognitoId },
+                    data: {
+                        balance: tenant.balance - app.property.pricePerMonth,
+                    },
+                });
+            }
+            // 3️⃣ create the lease and initial rent payment
             const newLease = yield prisma.lease.create({
                 data: {
                     startDate: new Date(),
@@ -147,38 +162,40 @@ const updateApplicationStatus = (req, res) => __awaiter(void 0, void 0, void 0, 
                     dueDate: new Date(),
                     paymentDate: new Date(),
                     paymentStatus: "Paid",
+                    type: "Rent",
+                    isApproved: true,
                 },
             });
+            // 4️⃣ attach tenant to property
             yield prisma.property.update({
                 where: { id: app.propertyId },
                 data: {
                     tenants: { connect: { cognitoId: app.tenantCognitoId } },
                 },
             });
+            // 5️⃣ update application record
             yield prisma.application.update({
-                where: { id: Number(id) },
+                where: { id: applicationId },
                 data: { status, leaseId: newLease.id },
             });
         }
         else {
+            // simply update status to Denied/Pending
             yield prisma.application.update({
-                where: { id: Number(id) },
+                where: { id: applicationId },
                 data: { status },
             });
         }
+        // return the new state
         const updatedApp = yield prisma.application.findUnique({
-            where: { id: Number(id) },
+            where: { id: applicationId },
             include: { property: true, tenant: true, lease: true },
         });
         res.json(updatedApp);
-        return;
     }
     catch (error) {
-        console.error("Error updating status:", error);
-        res
-            .status(500)
-            .json({ message: `Internal server error: ${error.message}` });
-        return;
+        console.error("Error updating application status:", error);
+        res.status(500).json({ message: "Internal server error." });
     }
 });
 exports.updateApplicationStatus = updateApplicationStatus;

@@ -126,19 +126,40 @@ model Manager {
 }
 
 model Tenant {
-  id          Int    @id @default(autoincrement())
-  cognitoId   String @unique
-  name        String
-  email       String
-  phoneNumber String
-  isSuspended   Boolean   @default(false)
+  id            Int      @id @default(autoincrement())
+  cognitoId     String   @unique
+  name          String
+  email         String
+  phoneNumber   String
+  isSuspended   Boolean  @default(false)
+  balance       Float    @default(0)       // new wallet balance
 
-  properties   Property[]    @relation("TenantProperties")
-  favorites    Property[]    @relation("TenantFavorites")
-  applications Application[]
-  leases       Lease[]
+  properties    Property[]    @relation("TenantProperties")
+  favorites      Property[]    @relation("TenantFavorites")
+  applications   Application[]
+  leases         Lease[]
 }
 
+enum PaymentType {
+  Rent
+  Deposit
+  Withdrawal
+}
+
+model Payment {
+  id            Int           @id @default(autoincrement())
+  leaseId       Int
+  amountDue     Float
+  amountPaid    Float
+  dueDate       DateTime
+  paymentDate   DateTime
+  paymentStatus PaymentStatus
+  type          PaymentType   @default(Rent)     // new
+  isApproved    Boolean       @default(false)    // for Deposit
+  receiptPath   String?
+
+  lease Lease @relation(fields: [leaseId], references: [id])
+}
 model Location {
   id          Int                                   @id @default(autoincrement())
   address     String
@@ -183,20 +204,6 @@ model Lease {
   application Application?
   payments    Payment[]
 }
-
-model Payment {
-  id            Int           @id @default(autoincrement())
-  amountDue     Float
-  amountPaid    Float
-  dueDate       DateTime
-  paymentDate   DateTime
-  paymentStatus PaymentStatus
-  leaseId       Int
-  receiptPath   String?
-
-  lease Lease @relation(fields: [leaseId], references: [id])
-}
-
 model Notification {
   id         Int      @id @default(autoincrement())
   userId     String   // cognitoId of the user

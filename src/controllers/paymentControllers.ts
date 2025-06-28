@@ -42,7 +42,6 @@ export const createPayment = async (
       },
     });
 
-    // Return the created payment immediately (receipt will be generated on GET)
     res.status(201).json(newPayment);
   } catch (error: any) {
     console.error("Error creating payment:", error);
@@ -50,7 +49,236 @@ export const createPayment = async (
       .status(500)
       .json({ message: "Internal server error creating payment." });
   }
+  return;
 };
+
+/**
+ * POST /payments/deposit-request
+ * Tenant creates a deposit request (pending approval).
+ */
+export const createDepositRequest = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const { leaseId, amount } = req.body;
+  if (amount <= 0) {
+    res.status(400).json({ message: "Invalid amount" });
+    return;
+  }
+
+  try {
+    const p = await prisma.payment.create({
+      data: {
+        leaseId,
+        amountDue: amount,
+        amountPaid: 0,
+        dueDate: new Date(),
+        paymentDate: new Date(),
+        paymentStatus: "Pending",
+        type: "Deposit",
+        isApproved: false,
+      },
+    });
+    res.status(201).json(p);
+  } catch (err: any) {
+    console.error("Error creating deposit request:", err);
+    res.status(500).json({ message: err.message });
+  }
+  return;
+};
+
+/**
+ * GET /payments/deposits/pending
+ * Manager lists all deposit requests awaiting approval.
+ */
+export const listPendingDeposits = async (
+  _req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const deposits = await prisma.payment.findMany({
+      where: { type: "Deposit", isApproved: false },
+      include: { lease: { include: { tenant: true } } },
+    });
+    res.json(deposits);
+  } catch (err: any) {
+    console.error("Error listing pending deposits:", err);
+    res.status(500).json({ message: err.message });
+  }
+  return;
+};
+
+/**
+ * PUT /payments/deposits/:id/approve
+ * Manager approves a deposit: mark paid + credit tenant balance.
+ */
+export const approveDeposit = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const id = Number(req.params.id);
+  try {
+    const p = await prisma.payment.findUnique({ where: { id } });
+    if (!p) {
+      res.status(404).json({ message: "Deposit not found" });
+      return;
+    }
+
+    const lease = await prisma.lease.findUnique({ where: { id: p.leaseId } });
+    if (!lease) {
+      res.status(404).json({ message: "Lease not found" });
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // mark approved
+      await tx.payment.update({
+        where: { id },
+        data: {
+          isApproved: true,
+          paymentStatus: "Paid",
+          amountPaid: p.amountDue,
+        },
+      });
+      // credit tenant
+      const tenant = await tx.tenant.findUnique({
+        where: { cognitoId: lease.tenantCognitoId },
+      });
+      if (tenant) {
+        await tx.tenant.update({
+          where: { cognitoId: tenant.cognitoId },
+          data: { balance: tenant.balance + p.amountDue },
+        });
+      }
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error approving deposit:", err);
+    res.status(500).json({ message: err.message });
+  }
+  return;
+};
+
+/**
+ * PUT /payments/deposits/:id/decline
+ * Manager declines a deposit: just flag it back to Pending.
+ */
+export const declineDeposit = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const id = Number(req.params.id);
+  try {
+    await prisma.payment.update({
+      where: { id },
+      data: { paymentStatus: "Pending" },
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error declining deposit:", err);
+    res.status(500).json({ message: err.message });
+  }
+  return;
+};
+
+/**
+ * POST /payments/withdraw
+ * Tenant withdraws funds if eligible.
+ */
+export const withdrawFunds = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const { tenantCognitoId, amount } = req.body;
+  if (amount <= 0) {
+    res.status(400).json({ message: "Invalid amount" });
+    return;
+  }
+
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { cognitoId: tenantCognitoId },
+    });
+    if (!tenant || tenant.balance < amount) {
+      res.status(400).json({ message: "Insufficient funds" });
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // deduct balance
+      await tx.tenant.update({
+        where: { cognitoId: tenantCognitoId },
+        data: { balance: tenant.balance - amount },
+      });
+      // record withdrawal
+      await tx.payment.create({
+        data: {
+          leaseId: 0,              // or null if your schema allows
+          amountDue: 0,
+          amountPaid: amount,
+          dueDate: new Date(),
+          paymentDate: new Date(),
+          paymentStatus: "Paid",
+          type: "Withdrawal",
+          isApproved: true,
+        },
+      });
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error withdrawing funds:", err);
+    res.status(500).json({ message: err.message });
+  }
+  return;
+};
+
+/**
+ * POST /tenants/:cognitoId/fund
+ * Manager manually tops-up tenant.
+ */
+export const fundTenant = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const { cognitoId } = req.params;
+  const { amount } = req.body;
+  if (amount <= 0) {
+    res.status(400).json({ message: "Invalid amount" });
+    return;
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const t = await tx.tenant.findUnique({ where: { cognitoId } });
+      if (!t) throw new Error("Tenant not found");
+      await tx.tenant.update({
+        where: { cognitoId },
+        data: { balance: t.balance + amount },
+      });
+      await tx.payment.create({
+        data: {
+          leaseId: 0,
+          amountDue: 0,
+          amountPaid: amount,
+          dueDate: new Date(),
+          paymentDate: new Date(),
+          paymentStatus: "Paid",
+          type: "Deposit",
+          isApproved: true,
+        },
+      });
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error funding tenant:", err);
+    res.status(500).json({ message: err.message });
+  }
+  return;
+};
+
 /**
  * GET /payments/tenant/:tenantCognitoId
  * Returns all payments (with lease info) for a given tenantCognitoId.
@@ -72,6 +300,7 @@ export const getPaymentsByTenant = async (
       .status(500)
       .json({ message: "Internal server error retrieving tenant payments." });
   }
+  return;
 };
 
 /**

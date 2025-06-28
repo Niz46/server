@@ -16,6 +16,9 @@ CREATE TYPE "ApplicationStatus" AS ENUM ('Pending', 'Denied', 'Approved');
 -- CreateEnum
 CREATE TYPE "PaymentStatus" AS ENUM ('Pending', 'Paid', 'PartiallyPaid', 'Overdue');
 
+-- CreateEnum
+CREATE TYPE "PaymentType" AS ENUM ('Rent', 'Deposit', 'Withdrawal');
+
 -- CreateTable
 CREATE TABLE "Property" (
     "id" SERIAL NOT NULL,
@@ -61,8 +64,25 @@ CREATE TABLE "Tenant" (
     "email" TEXT NOT NULL,
     "phoneNumber" TEXT NOT NULL,
     "isSuspended" BOOLEAN NOT NULL DEFAULT false,
+    "balance" DOUBLE PRECISION NOT NULL DEFAULT 0,
 
     CONSTRAINT "Tenant_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Payment" (
+    "id" SERIAL NOT NULL,
+    "leaseId" INTEGER NOT NULL,
+    "amountDue" DOUBLE PRECISION NOT NULL,
+    "amountPaid" DOUBLE PRECISION NOT NULL,
+    "dueDate" TIMESTAMP(3) NOT NULL,
+    "paymentDate" TIMESTAMP(3) NOT NULL,
+    "paymentStatus" "PaymentStatus" NOT NULL,
+    "type" "PaymentType" NOT NULL DEFAULT 'Rent',
+    "isApproved" BOOLEAN NOT NULL DEFAULT false,
+    "receiptPath" TEXT,
+
+    CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -106,20 +126,6 @@ CREATE TABLE "Lease" (
     "agreementPath" TEXT,
 
     CONSTRAINT "Lease_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "Payment" (
-    "id" SERIAL NOT NULL,
-    "amountDue" DOUBLE PRECISION NOT NULL,
-    "amountPaid" DOUBLE PRECISION NOT NULL,
-    "dueDate" TIMESTAMP(3) NOT NULL,
-    "paymentDate" TIMESTAMP(3) NOT NULL,
-    "paymentStatus" "PaymentStatus" NOT NULL,
-    "leaseId" INTEGER NOT NULL,
-    "receiptPath" TEXT,
-
-    CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -171,6 +177,9 @@ ALTER TABLE "Property" ADD CONSTRAINT "Property_locationId_fkey" FOREIGN KEY ("l
 ALTER TABLE "Property" ADD CONSTRAINT "Property_managerCognitoId_fkey" FOREIGN KEY ("managerCognitoId") REFERENCES "Manager"("cognitoId") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_leaseId_fkey" FOREIGN KEY ("leaseId") REFERENCES "Lease"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Application" ADD CONSTRAINT "Application_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -184,9 +193,6 @@ ALTER TABLE "Lease" ADD CONSTRAINT "Lease_propertyId_fkey" FOREIGN KEY ("propert
 
 -- AddForeignKey
 ALTER TABLE "Lease" ADD CONSTRAINT "Lease_tenantCognitoId_fkey" FOREIGN KEY ("tenantCognitoId") REFERENCES "Tenant"("cognitoId") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Payment" ADD CONSTRAINT "Payment_leaseId_fkey" FOREIGN KEY ("leaseId") REFERENCES "Lease"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_TenantFavorites" ADD CONSTRAINT "_TenantFavorites_A_fkey" FOREIGN KEY ("A") REFERENCES "Property"("id") ON DELETE CASCADE ON UPDATE CASCADE;

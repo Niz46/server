@@ -148,11 +148,11 @@ export const updateApplicationStatus = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { id } = req.params;
+    const applicationId = Number(req.params.id);
     const { status } = req.body;
 
     const app = await prisma.application.findUnique({
-      where: { id: Number(id) },
+      where: { id: applicationId },
       include: { property: true, tenant: true },
     });
     if (!app) {
@@ -160,7 +160,23 @@ export const updateApplicationStatus = async (
       return;
     }
 
+    // If we're approving, try to debit from the tenant's wallet first
     if (status === "Approved") {
+      // 1️⃣ load up‐to‐date tenant record
+      const tenant = await prisma.tenant.findUnique({
+        where: { cognitoId: app.tenantCognitoId },
+      });
+
+      // 2️⃣ debit if they have enough balance
+      if (tenant && tenant.balance >= app.property.pricePerMonth) {
+        await prisma.tenant.update({
+          where: { cognitoId: tenant.cognitoId },
+          data: {
+            balance: tenant.balance - app.property.pricePerMonth,
+          },
+        });
+      }
+      // 3️⃣ create the lease and initial rent payment
       const newLease = await prisma.lease.create({
         data: {
           startDate: new Date(),
@@ -182,9 +198,12 @@ export const updateApplicationStatus = async (
           dueDate: new Date(),
           paymentDate: new Date(),
           paymentStatus: "Paid",
+          type: "Rent",
+          isApproved: true,
         },
       });
 
+      // 4️⃣ attach tenant to property
       await prisma.property.update({
         where: { id: app.propertyId },
         data: {
@@ -192,28 +211,27 @@ export const updateApplicationStatus = async (
         },
       });
 
+      // 5️⃣ update application record
       await prisma.application.update({
-        where: { id: Number(id) },
+        where: { id: applicationId },
         data: { status, leaseId: newLease.id },
       });
     } else {
+      // simply update status to Denied/Pending
       await prisma.application.update({
-        where: { id: Number(id) },
+        where: { id: applicationId },
         data: { status },
       });
     }
 
+    // return the new state
     const updatedApp = await prisma.application.findUnique({
-      where: { id: Number(id) },
+      where: { id: applicationId },
       include: { property: true, tenant: true, lease: true },
     });
     res.json(updatedApp);
-    return;
   } catch (error: any) {
-    console.error("Error updating status:", error);
-    res
-      .status(500)
-      .json({ message: `Internal server error: ${error.message}` });
-    return;
+    console.error("Error updating application status:", error);
+    res.status(500).json({ message: "Internal server error." });
   }
 };

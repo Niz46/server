@@ -13,7 +13,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.downloadReceipt = exports.getPaymentsByTenant = exports.createPayment = void 0;
+exports.downloadReceipt = exports.getPaymentsByTenant = exports.fundTenant = exports.withdrawFunds = exports.declineDeposit = exports.approveDeposit = exports.listPendingDeposits = exports.createDepositRequest = exports.createPayment = void 0;
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
@@ -49,7 +49,6 @@ const createPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                 paymentStatus,
             },
         });
-        // Return the created payment immediately (receipt will be generated on GET)
         res.status(201).json(newPayment);
     }
     catch (error) {
@@ -58,8 +57,216 @@ const createPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             .status(500)
             .json({ message: "Internal server error creating payment." });
     }
+    return;
 });
 exports.createPayment = createPayment;
+/**
+ * POST /payments/deposit-request
+ * Tenant creates a deposit request (pending approval).
+ */
+const createDepositRequest = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { leaseId, amount } = req.body;
+    if (amount <= 0) {
+        res.status(400).json({ message: "Invalid amount" });
+        return;
+    }
+    try {
+        const p = yield prisma.payment.create({
+            data: {
+                leaseId,
+                amountDue: amount,
+                amountPaid: 0,
+                dueDate: new Date(),
+                paymentDate: new Date(),
+                paymentStatus: "Pending",
+                type: "Deposit",
+                isApproved: false,
+            },
+        });
+        res.status(201).json(p);
+    }
+    catch (err) {
+        console.error("Error creating deposit request:", err);
+        res.status(500).json({ message: err.message });
+    }
+    return;
+});
+exports.createDepositRequest = createDepositRequest;
+/**
+ * GET /payments/deposits/pending
+ * Manager lists all deposit requests awaiting approval.
+ */
+const listPendingDeposits = (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const deposits = yield prisma.payment.findMany({
+            where: { type: "Deposit", isApproved: false },
+            include: { lease: { include: { tenant: true } } },
+        });
+        res.json(deposits);
+    }
+    catch (err) {
+        console.error("Error listing pending deposits:", err);
+        res.status(500).json({ message: err.message });
+    }
+    return;
+});
+exports.listPendingDeposits = listPendingDeposits;
+/**
+ * PUT /payments/deposits/:id/approve
+ * Manager approves a deposit: mark paid + credit tenant balance.
+ */
+const approveDeposit = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const id = Number(req.params.id);
+    try {
+        const p = yield prisma.payment.findUnique({ where: { id } });
+        if (!p) {
+            res.status(404).json({ message: "Deposit not found" });
+            return;
+        }
+        const lease = yield prisma.lease.findUnique({ where: { id: p.leaseId } });
+        if (!lease) {
+            res.status(404).json({ message: "Lease not found" });
+            return;
+        }
+        yield prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
+            // mark approved
+            yield tx.payment.update({
+                where: { id },
+                data: {
+                    isApproved: true,
+                    paymentStatus: "Paid",
+                    amountPaid: p.amountDue,
+                },
+            });
+            // credit tenant
+            const tenant = yield tx.tenant.findUnique({
+                where: { cognitoId: lease.tenantCognitoId },
+            });
+            if (tenant) {
+                yield tx.tenant.update({
+                    where: { cognitoId: tenant.cognitoId },
+                    data: { balance: tenant.balance + p.amountDue },
+                });
+            }
+        }));
+        res.json({ success: true });
+    }
+    catch (err) {
+        console.error("Error approving deposit:", err);
+        res.status(500).json({ message: err.message });
+    }
+    return;
+});
+exports.approveDeposit = approveDeposit;
+/**
+ * PUT /payments/deposits/:id/decline
+ * Manager declines a deposit: just flag it back to Pending.
+ */
+const declineDeposit = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const id = Number(req.params.id);
+    try {
+        yield prisma.payment.update({
+            where: { id },
+            data: { paymentStatus: "Pending" },
+        });
+        res.json({ success: true });
+    }
+    catch (err) {
+        console.error("Error declining deposit:", err);
+        res.status(500).json({ message: err.message });
+    }
+    return;
+});
+exports.declineDeposit = declineDeposit;
+/**
+ * POST /payments/withdraw
+ * Tenant withdraws funds if eligible.
+ */
+const withdrawFunds = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { tenantCognitoId, amount } = req.body;
+    if (amount <= 0) {
+        res.status(400).json({ message: "Invalid amount" });
+        return;
+    }
+    try {
+        const tenant = yield prisma.tenant.findUnique({
+            where: { cognitoId: tenantCognitoId },
+        });
+        if (!tenant || tenant.balance < amount) {
+            res.status(400).json({ message: "Insufficient funds" });
+            return;
+        }
+        yield prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
+            // deduct balance
+            yield tx.tenant.update({
+                where: { cognitoId: tenantCognitoId },
+                data: { balance: tenant.balance - amount },
+            });
+            // record withdrawal
+            yield tx.payment.create({
+                data: {
+                    leaseId: 0, // or null if your schema allows
+                    amountDue: 0,
+                    amountPaid: amount,
+                    dueDate: new Date(),
+                    paymentDate: new Date(),
+                    paymentStatus: "Paid",
+                    type: "Withdrawal",
+                    isApproved: true,
+                },
+            });
+        }));
+        res.json({ success: true });
+    }
+    catch (err) {
+        console.error("Error withdrawing funds:", err);
+        res.status(500).json({ message: err.message });
+    }
+    return;
+});
+exports.withdrawFunds = withdrawFunds;
+/**
+ * POST /tenants/:cognitoId/fund
+ * Manager manually tops-up tenant.
+ */
+const fundTenant = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { cognitoId } = req.params;
+    const { amount } = req.body;
+    if (amount <= 0) {
+        res.status(400).json({ message: "Invalid amount" });
+        return;
+    }
+    try {
+        yield prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
+            const t = yield tx.tenant.findUnique({ where: { cognitoId } });
+            if (!t)
+                throw new Error("Tenant not found");
+            yield tx.tenant.update({
+                where: { cognitoId },
+                data: { balance: t.balance + amount },
+            });
+            yield tx.payment.create({
+                data: {
+                    leaseId: 0,
+                    amountDue: 0,
+                    amountPaid: amount,
+                    dueDate: new Date(),
+                    paymentDate: new Date(),
+                    paymentStatus: "Paid",
+                    type: "Deposit",
+                    isApproved: true,
+                },
+            });
+        }));
+        res.json({ success: true });
+    }
+    catch (err) {
+        console.error("Error funding tenant:", err);
+        res.status(500).json({ message: err.message });
+    }
+    return;
+});
+exports.fundTenant = fundTenant;
 /**
  * GET /payments/tenant/:tenantCognitoId
  * Returns all payments (with lease info) for a given tenantCognitoId.
@@ -79,6 +286,7 @@ const getPaymentsByTenant = (req, res) => __awaiter(void 0, void 0, void 0, func
             .status(500)
             .json({ message: "Internal server error retrieving tenant payments." });
     }
+    return;
 });
 exports.getPaymentsByTenant = getPaymentsByTenant;
 /**
