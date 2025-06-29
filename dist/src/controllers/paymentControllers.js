@@ -96,6 +96,7 @@ const createDepositRequest = (req, res) => __awaiter(void 0, void 0, void 0, fun
                 paymentStatus: "Pending",
                 type: "Deposit",
                 isApproved: false,
+                tenantCognitoId,
             },
         });
         res.status(201).json(deposit);
@@ -239,6 +240,7 @@ const withdrawFunds = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                     isApproved: true,
                     destinationType,
                     destinationDetails,
+                    tenantCognitoId,
                 },
             });
         }));

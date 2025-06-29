@@ -98,6 +98,7 @@ export const createDepositRequest = async (
         paymentStatus: "Pending",
         type: "Deposit",
         isApproved: false,
+        tenantCognitoId,
       },
     });
     res.status(201).json(deposit);
@@ -257,6 +258,7 @@ export const withdrawFunds = async (req: Request, res: Response): Promise<void> 
           isApproved: true,
           destinationType,
           destinationDetails,
+          tenantCognitoId,
         },
       });
     });
@@ -324,6 +326,7 @@ export const getPaymentsByTenant = async (
     const payments = await prisma.payment.findMany({
       where: { lease: { tenantCognitoId } },
       include: { lease: { include: { property: true } } },
+      orderBy: { paymentDate: "desc" },
     });
     res.status(200).json(payments);
   } catch (error: any) {

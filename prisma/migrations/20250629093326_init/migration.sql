@@ -83,6 +83,7 @@ CREATE TABLE "Payment" (
     "receiptPath" TEXT,
     "destinationType" TEXT,
     "destinationDetails" TEXT,
+    "tenantCognitoId" TEXT,
 
     CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
 );

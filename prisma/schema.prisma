@@ -160,7 +160,7 @@ model Payment {
   destinationType    String?       // e.g. "BankTransfer" | "Crypto"
   destinationDetails String?      // e.g. "BankAccountNumber" | "CryptoWalletAddress"
 
-
+  tenantCognitoId String?
   lease Lease? @relation(fields: [leaseId], references: [id])
 }
 model Location {
