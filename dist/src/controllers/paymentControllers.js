@@ -63,32 +63,27 @@ exports.createPayment = createPayment;
 /**
  * POST /payments/deposit-request
  * Tenant creates a deposit request (pending approval).
+ * → reads tenantCognitoId from req.user.id
  */
 const createDepositRequest = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
-    // 1️⃣ Pull the tenant’s cognitoId out of req.user (set by authMiddleware)
     const tenantCognitoId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
     if (!tenantCognitoId) {
         res.status(401).json({ message: "Unauthorized" });
         return;
     }
-    // 2️⃣ Grab leaseId + amount from the body
     const { leaseId, amount } = req.body;
-    if (typeof leaseId !== "number" || leaseId <= 0 || amount <= 0) {
-        res.status(400).json({ message: "Invalid leaseId or amount" });
+    if (!leaseId || amount <= 0) {
+        res.status(400).json({ message: "leaseId and amount required" });
         return;
     }
-    // 3️⃣ Verify the lease exists & belongs to this tenant
-    const lease = yield prisma.lease.findUnique({
-        where: { id: leaseId },
-    });
+    const lease = yield prisma.lease.findUnique({ where: { id: leaseId } });
     if (!lease || lease.tenantCognitoId !== tenantCognitoId) {
         res
             .status(400)
             .json({ message: "Lease not found or does not belong to you" });
         return;
     }
-    // 4️⃣ Now we can safely create a “Deposit” Payment record
     try {
         const deposit = yield prisma.payment.create({
             data: {
@@ -108,6 +103,7 @@ const createDepositRequest = (req, res) => __awaiter(void 0, void 0, void 0, fun
         console.error("Error creating deposit request:", err);
         res.status(500).json({ message: err.message });
     }
+    return;
 });
 exports.createDepositRequest = createDepositRequest;
 /**
@@ -139,6 +135,11 @@ const approveDeposit = (req, res) => __awaiter(void 0, void 0, void 0, function*
         const p = yield prisma.payment.findUnique({ where: { id } });
         if (!p) {
             res.status(404).json({ message: "Deposit not found" });
+            return;
+        }
+        // ---- NEW: Make sure there _is_ a leaseId and it's not null ----
+        if (p.leaseId == null) {
+            res.status(400).json({ message: "Invalid deposit: no lease associated" });
             return;
         }
         const lease = yield prisma.lease.findUnique({ where: { id: p.leaseId } });
@@ -201,29 +202,33 @@ exports.declineDeposit = declineDeposit;
  * Tenant withdraws funds if eligible.
  */
 const withdrawFunds = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { tenantCognitoId, amount } = req.body;
+    var _a;
+    const tenantCognitoId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+    if (!tenantCognitoId) {
+        res.status(401).json({ message: "Unauthorized" });
+        return;
+    }
+    const { amount } = req.body;
     if (amount <= 0) {
         res.status(400).json({ message: "Invalid amount" });
         return;
     }
+    const tenant = yield prisma.tenant.findUnique({
+        where: { cognitoId: tenantCognitoId },
+    });
+    if (!tenant || tenant.balance < amount) {
+        res.status(400).json({ message: "Insufficient funds" });
+        return;
+    }
     try {
-        const tenant = yield prisma.tenant.findUnique({
-            where: { cognitoId: tenantCognitoId },
-        });
-        if (!tenant || tenant.balance < amount) {
-            res.status(400).json({ message: "Insufficient funds" });
-            return;
-        }
         yield prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
-            // deduct balance
             yield tx.tenant.update({
                 where: { cognitoId: tenantCognitoId },
                 data: { balance: tenant.balance - amount },
             });
-            // record withdrawal
             yield tx.payment.create({
                 data: {
-                    leaseId: 0, // or null if your schema allows
+                    leaseId: null, // assuming your schema allows nullable leaseId
                     amountDue: 0,
                     amountPaid: amount,
                     dueDate: new Date(),
@@ -256,16 +261,17 @@ const fundTenant = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
     }
     try {
         yield prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
-            const t = yield tx.tenant.findUnique({ where: { cognitoId } });
-            if (!t)
+            const tenant = yield tx.tenant.findUnique({ where: { cognitoId } });
+            if (!tenant) {
                 throw new Error("Tenant not found");
+            }
             yield tx.tenant.update({
                 where: { cognitoId },
-                data: { balance: t.balance + amount },
+                data: { balance: tenant.balance + amount },
             });
             yield tx.payment.create({
                 data: {
-                    leaseId: 0,
+                    leaseId: null,
                     amountDue: 0,
                     amountPaid: amount,
                     dueDate: new Date(),

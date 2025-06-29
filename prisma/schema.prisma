@@ -148,7 +148,7 @@ enum PaymentType {
 
 model Payment {
   id            Int           @id @default(autoincrement())
-  leaseId       Int
+  leaseId       Int?
   amountDue     Float
   amountPaid    Float
   dueDate       DateTime
@@ -157,8 +157,7 @@ model Payment {
   type          PaymentType   @default(Rent)     // new
   isApproved    Boolean       @default(false)    // for Deposit
   receiptPath   String?
-
-  lease Lease @relation(fields: [leaseId], references: [id])
+  lease Lease? @relation(fields: [leaseId], references: [id])
 }
 model Location {
   id          Int                                   @id @default(autoincrement())
