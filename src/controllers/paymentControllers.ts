@@ -60,14 +60,34 @@ export const createDepositRequest = async (
   req: Request,
   res: Response
 ): Promise<void> => {
-  const { leaseId, amount } = req.body;
-  if (amount <= 0) {
-    res.status(400).json({ message: "Invalid amount" });
+  // 1️⃣ Pull the tenant’s cognitoId out of req.user (set by authMiddleware)
+  const tenantCognitoId = req.user?.id;
+  if (!tenantCognitoId) {
+    res.status(401).json({ message: "Unauthorized" });
     return;
   }
 
+  // 2️⃣ Grab leaseId + amount from the body
+  const { leaseId, amount } = req.body;
+  if (typeof leaseId !== "number" || leaseId <= 0 || amount <= 0) {
+    res.status(400).json({ message: "Invalid leaseId or amount" });
+    return;
+  }
+
+  // 3️⃣ Verify the lease exists & belongs to this tenant
+  const lease = await prisma.lease.findUnique({
+    where: { id: leaseId },
+  });
+  if (!lease || lease.tenantCognitoId !== tenantCognitoId) {
+    res
+      .status(400)
+      .json({ message: "Lease not found or does not belong to you" });
+    return;
+  }
+
+  // 4️⃣ Now we can safely create a “Deposit” Payment record
   try {
-    const p = await prisma.payment.create({
+    const deposit = await prisma.payment.create({
       data: {
         leaseId,
         amountDue: amount,
@@ -79,12 +99,11 @@ export const createDepositRequest = async (
         isApproved: false,
       },
     });
-    res.status(201).json(p);
+    res.status(201).json(deposit);
   } catch (err: any) {
     console.error("Error creating deposit request:", err);
     res.status(500).json({ message: err.message });
   }
-  return;
 };
 
 /**
@@ -214,7 +233,7 @@ export const withdrawFunds = async (
       // record withdrawal
       await tx.payment.create({
         data: {
-          leaseId: 0,              // or null if your schema allows
+          leaseId: 0, // or null if your schema allows
           amountDue: 0,
           amountPaid: amount,
           dueDate: new Date(),
