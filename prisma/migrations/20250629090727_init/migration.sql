@@ -81,6 +81,8 @@ CREATE TABLE "Payment" (
     "type" "PaymentType" NOT NULL DEFAULT 'Rent',
     "isApproved" BOOLEAN NOT NULL DEFAULT false,
     "receiptPath" TEXT,
+    "destinationType" TEXT,
+    "destinationDetails" TEXT,
 
     CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
 );

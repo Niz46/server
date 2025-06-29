@@ -63,7 +63,6 @@ exports.createPayment = createPayment;
 /**
  * POST /payments/deposit-request
  * Tenant creates a deposit request (pending approval).
- * → reads tenantCognitoId from req.user.id
  */
 const createDepositRequest = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
@@ -72,8 +71,10 @@ const createDepositRequest = (req, res) => __awaiter(void 0, void 0, void 0, fun
         res.status(401).json({ message: "Unauthorized" });
         return;
     }
+    // only pull leaseId and amount
     const { leaseId, amount } = req.body;
-    if (!leaseId || amount <= 0) {
+    // tighten the guard: null/undefined or ≤0 are invalid
+    if (leaseId == null || leaseId <= 0 || amount == null || amount <= 0) {
         res.status(400).json({ message: "leaseId and amount required" });
         return;
     }
@@ -103,7 +104,6 @@ const createDepositRequest = (req, res) => __awaiter(void 0, void 0, void 0, fun
         console.error("Error creating deposit request:", err);
         res.status(500).json({ message: err.message });
     }
-    return;
 });
 exports.createDepositRequest = createDepositRequest;
 /**
@@ -208,9 +208,10 @@ const withdrawFunds = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         res.status(401).json({ message: "Unauthorized" });
         return;
     }
-    const { amount } = req.body;
-    if (amount <= 0) {
-        res.status(400).json({ message: "Invalid amount" });
+    // Extract the new fields
+    const { amount, destinationType, destinationDetails } = req.body;
+    if (amount <= 0 || !destinationType || !destinationDetails) {
+        res.status(400).json({ message: "amount, destinationType, and destinationDetails are required" });
         return;
     }
     const tenant = yield prisma.tenant.findUnique({
@@ -228,7 +229,7 @@ const withdrawFunds = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             });
             yield tx.payment.create({
                 data: {
-                    leaseId: null, // assuming your schema allows nullable leaseId
+                    leaseId: null,
                     amountDue: 0,
                     amountPaid: amount,
                     dueDate: new Date(),
@@ -236,6 +237,8 @@ const withdrawFunds = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                     paymentStatus: "Paid",
                     type: "Withdrawal",
                     isApproved: true,
+                    destinationType,
+                    destinationDetails,
                 },
             });
         }));
@@ -245,7 +248,6 @@ const withdrawFunds = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         console.error("Error withdrawing funds:", err);
         res.status(500).json({ message: err.message });
     }
-    return;
 });
 exports.withdrawFunds = withdrawFunds;
 /**

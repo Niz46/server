@@ -52,10 +52,10 @@ export const createPayment = async (
   return;
 };
 
+
 /**
  * POST /payments/deposit-request
  * Tenant creates a deposit request (pending approval).
- * → reads tenantCognitoId from req.user.id
  */
 export const createDepositRequest = async (
   req: Request,
@@ -67,8 +67,14 @@ export const createDepositRequest = async (
     return;
   }
 
-  const { leaseId, amount } = req.body as { leaseId: number; amount: number };
-  if (!leaseId || amount <= 0) {
+  // only pull leaseId and amount
+  const { leaseId, amount } = req.body as {
+    leaseId?: number;
+    amount?: number;
+  };
+
+  // tighten the guard: null/undefined or ≤0 are invalid
+  if (leaseId == null || leaseId <= 0 || amount == null || amount <= 0) {
     res.status(400).json({ message: "leaseId and amount required" });
     return;
   }
@@ -99,7 +105,6 @@ export const createDepositRequest = async (
     console.error("Error creating deposit request:", err);
     res.status(500).json({ message: err.message });
   }
-  return;
 };
 
 /**
@@ -214,9 +219,15 @@ export const withdrawFunds = async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  const { amount } = req.body as { amount: number };
-  if (amount <= 0) {
-    res.status(400).json({ message: "Invalid amount" });
+  // Extract the new fields
+  const { amount, destinationType, destinationDetails } = req.body as {
+    amount: number;
+    destinationType: "BankTransfer" | "Crypto";
+    destinationDetails: string;
+  };
+
+  if (amount <= 0 || !destinationType || !destinationDetails) {
+    res.status(400).json({ message: "amount, destinationType, and destinationDetails are required" });
     return;
   }
 
@@ -236,7 +247,7 @@ export const withdrawFunds = async (req: Request, res: Response): Promise<void> 
       });
       await tx.payment.create({
         data: {
-          leaseId: null, // assuming your schema allows nullable leaseId
+          leaseId: null,
           amountDue: 0,
           amountPaid: amount,
           dueDate: new Date(),
@@ -244,6 +255,8 @@ export const withdrawFunds = async (req: Request, res: Response): Promise<void> 
           paymentStatus: "Paid",
           type: "Withdrawal",
           isApproved: true,
+          destinationType,
+          destinationDetails,
         },
       });
     });
@@ -252,7 +265,6 @@ export const withdrawFunds = async (req: Request, res: Response): Promise<void> 
     console.error("Error withdrawing funds:", err);
     res.status(500).json({ message: err.message });
   }
-  return;
 };
 
 /**

@@ -132,7 +132,7 @@ model Tenant {
   email         String
   phoneNumber   String
   isSuspended   Boolean  @default(false)
-  balance       Float    @default(0)       // new wallet balance
+  balance       Float    @default(0)       // Tenant's balance for deposits, rent, etc.
 
   properties    Property[]    @relation("TenantProperties")
   favorites      Property[]    @relation("TenantFavorites")
@@ -154,9 +154,13 @@ model Payment {
   dueDate       DateTime
   paymentDate   DateTime
   paymentStatus PaymentStatus
-  type          PaymentType   @default(Rent)     // new
+  type          PaymentType   @default(Rent)     // Rent | Deposit | Withdrawal
   isApproved    Boolean       @default(false)    // for Deposit
   receiptPath   String?
+  destinationType    String?       // e.g. "BankTransfer" | "Crypto"
+  destinationDetails String?      // e.g. "BankAccountNumber" | "CryptoWalletAddress"
+
+
   lease Lease? @relation(fields: [leaseId], references: [id])
 }
 model Location {
