@@ -52,7 +52,6 @@ export const createPayment = async (
   return;
 };
 
-
 /**
  * POST /payments/deposit-request
  * Tenant creates a deposit request (pending approval).
@@ -213,7 +212,10 @@ export const declineDeposit = async (
  * POST /payments/withdraw
  * Tenant withdraws funds if eligible.
  */
-export const withdrawFunds = async (req: Request, res: Response): Promise<void> => {
+export const withdrawFunds = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   const tenantCognitoId = req.user?.id;
   if (!tenantCognitoId) {
     res.status(401).json({ message: "Unauthorized" });
@@ -228,7 +230,11 @@ export const withdrawFunds = async (req: Request, res: Response): Promise<void> 
   };
 
   if (amount <= 0 || !destinationType || !destinationDetails) {
-    res.status(400).json({ message: "amount, destinationType, and destinationDetails are required" });
+    res
+      .status(400)
+      .json({
+        message: "amount, destinationType, and destinationDetails are required",
+      });
     return;
   }
 
@@ -273,7 +279,10 @@ export const withdrawFunds = async (req: Request, res: Response): Promise<void> 
  * POST /tenants/:cognitoId/fund
  * Manager manually tops-up tenant.
  */
-export const fundTenant = async (req: Request, res: Response): Promise<void> => {
+export const fundTenant = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   const { cognitoId } = req.params;
   const { amount } = req.body as { amount: number };
 
@@ -324,7 +333,7 @@ export const getPaymentsByTenant = async (
   try {
     const { tenantCognitoId } = req.params;
     const payments = await prisma.payment.findMany({
-      where: { lease: { tenantCognitoId } },
+      where: { tenantCognitoId },
       include: { lease: { include: { property: true } } },
       orderBy: { paymentDate: "desc" },
     });

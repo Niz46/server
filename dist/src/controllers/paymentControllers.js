@@ -303,7 +303,7 @@ const getPaymentsByTenant = (req, res) => __awaiter(void 0, void 0, void 0, func
     try {
         const { tenantCognitoId } = req.params;
         const payments = yield prisma.payment.findMany({
-            where: { lease: { tenantCognitoId } },
+            where: { tenantCognitoId },
             include: { lease: { include: { property: true } } },
             orderBy: { paymentDate: "desc" },
         });
