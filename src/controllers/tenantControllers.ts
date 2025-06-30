@@ -13,6 +13,7 @@ export const getAllTenants = async (req: Request, res: Response) => {
         name: true,
         email: true,
         isSuspended: true,
+        balance: true,
       },
     });
     res.json(tenants);
