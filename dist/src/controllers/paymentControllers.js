@@ -212,7 +212,11 @@ const withdrawFunds = (req, res) => __awaiter(void 0, void 0, void 0, function* 
     // Extract the new fields
     const { amount, destinationType, destinationDetails } = req.body;
     if (amount <= 0 || !destinationType || !destinationDetails) {
-        res.status(400).json({ message: "amount, destinationType, and destinationDetails are required" });
+        res
+            .status(400)
+            .json({
+            message: "amount, destinationType, and destinationDetails are required",
+        });
         return;
     }
     const tenant = yield prisma.tenant.findUnique({
