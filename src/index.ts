@@ -25,7 +25,7 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 3002;
 const ALLOWED_ORIGINS = [
   'https://mileshomerealestate.com',
   'https://app.mileshomerealestate.com',
-  "https://app-milehomerealestate-com.onrender.com",
+  "https://app-milehomerealestate-com-q1n2.onrender.com",
   'http://localhost:3000', // for local development
 ];
 
