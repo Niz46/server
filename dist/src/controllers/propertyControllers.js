@@ -30,6 +30,26 @@ const wkt_1 = require("@terraformer/wkt");
 const client_s3_1 = require("@aws-sdk/client-s3");
 const axios_1 = __importDefault(require("axios"));
 const prisma = new client_1.PrismaClient();
+// add after const prisma = new PrismaClient();
+function getDbSchema() {
+    // Prefer explicit env var DB_SCHEMA; fallback to parsing DATABASE_URL ?schema=...
+    let schema = (process.env.DB_SCHEMA || "").trim();
+    if (!schema && process.env.DATABASE_URL) {
+        const m = process.env.DATABASE_URL.match(/[?&]schema=([a-zA-Z0-9_]+)/);
+        if (m)
+            schema = m[1];
+    }
+    if (!schema) {
+        // If still missing, fallback to 'public' (but log so you can notice)
+        console.warn("DB schema not provided; defaulting to 'public'. Set DB_SCHEMA in your .env");
+        schema = "public";
+    }
+    // Validate to avoid SQL injection when we inject schema into SQL strings
+    if (!/^[a-zA-Z0-9_]+$/.test(schema)) {
+        throw new Error(`Invalid DB schema name: ${schema}`);
+    }
+    return schema;
+}
 // Initialize S3 client (ensure AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET_NAME are set in .env)
 if (!process.env.AWS_REGION) {
     console.error("Missing AWS_REGION in environment");
@@ -47,118 +67,90 @@ const s3Client = new client_s3_1.S3Client({
 const getProperties = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { favoriteIds, priceMin, priceMax, beds, baths, propertyType, squareFeetMin, squareFeetMax, amenities, availableFrom, latitude, longitude, } = req.query;
-        // Build dynamic WHERE clause as Prisma.Sql fragments
-        const whereConditions = [];
+        const where = {};
+        // favorites
         if (favoriteIds) {
             const ids = favoriteIds
                 .split(",")
-                .map(Number)
+                .map((s) => Number(s.trim()))
                 .filter((n) => !isNaN(n));
-            if (ids.length) {
-                whereConditions.push(client_1.Prisma.sql `p.id IN (${client_1.Prisma.join(ids)})`);
-            }
+            if (ids.length)
+                where.id = { in: ids };
         }
-        if (priceMin) {
-            const pm = Number(priceMin);
-            if (!isNaN(pm)) {
-                whereConditions.push(client_1.Prisma.sql `p."pricePerMonth" >= ${pm}`);
-            }
+        // price
+        if (priceMin || priceMax) {
+            where.pricePerMonth = {};
+            if (priceMin && !isNaN(Number(priceMin)))
+                where.pricePerMonth.gte = Number(priceMin);
+            if (priceMax && !isNaN(Number(priceMax)))
+                where.pricePerMonth.lte = Number(priceMax);
         }
-        if (priceMax) {
-            const pM = Number(priceMax);
-            if (!isNaN(pM)) {
-                whereConditions.push(client_1.Prisma.sql `p."pricePerMonth" <= ${pM}`);
-            }
+        // beds / baths / squareFeet
+        if (beds && beds !== "any" && !isNaN(Number(beds)))
+            where.beds = { gte: Number(beds) };
+        if (baths && baths !== "any" && !isNaN(Number(baths)))
+            where.baths = { gte: Number(baths) };
+        if (squareFeetMin && !isNaN(Number(squareFeetMin))) {
+            where.squareFeet = Object.assign(Object.assign({}, (where.squareFeet || {})), { gte: Number(squareFeetMin) });
         }
-        if (beds && beds !== "any") {
-            const b = Number(beds);
-            if (!isNaN(b)) {
-                whereConditions.push(client_1.Prisma.sql `p.beds >= ${b}`);
-            }
+        if (squareFeetMax && !isNaN(Number(squareFeetMax))) {
+            where.squareFeet = Object.assign(Object.assign({}, (where.squareFeet || {})), { lte: Number(squareFeetMax) });
         }
-        if (baths && baths !== "any") {
-            const bt = Number(baths);
-            if (!isNaN(bt)) {
-                whereConditions.push(client_1.Prisma.sql `p.baths >= ${bt}`);
-            }
-        }
-        if (squareFeetMin) {
-            const sfMin = Number(squareFeetMin);
-            if (!isNaN(sfMin)) {
-                whereConditions.push(client_1.Prisma.sql `p."squareFeet" >= ${sfMin}`);
-            }
-        }
-        if (squareFeetMax) {
-            const sfMax = Number(squareFeetMax);
-            if (!isNaN(sfMax)) {
-                whereConditions.push(client_1.Prisma.sql `p."squareFeet" <= ${sfMax}`);
-            }
-        }
-        if (propertyType && propertyType !== "any") {
-            whereConditions.push(client_1.Prisma.sql `p."propertyType" = ${propertyType}::"PropertyType"`);
-        }
+        // propertyType
+        if (propertyType && propertyType !== "any")
+            where.propertyType = propertyType;
+        // amenities (array)
         if (amenities && amenities !== "any") {
-            const amenArray = amenities.split(",").map((s) => s.trim());
-            if (amenArray.length) {
-                whereConditions.push(client_1.Prisma.sql `p.amenities @> ${amenArray}`);
-            }
+            const amenArray = amenities
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean);
+            if (amenArray.length)
+                where.amenities = { hasSome: amenArray };
         }
+        // availableFrom -> has lease with startDate <= date
         if (availableFrom && availableFrom !== "any") {
-            const dateStr = availableFrom;
-            const dt = new Date(dateStr);
-            if (!isNaN(dt.getTime())) {
-                whereConditions.push(client_1.Prisma.sql `EXISTS (
-            SELECT 1
-            FROM "Lease" l
-            WHERE l."propertyId" = p.id
-              AND l."startDate" <= ${dt.toISOString()}
-          )`);
-            }
+            const dt = new Date(availableFrom);
+            if (!isNaN(dt.getTime()))
+                where.leases = { some: { startDate: { lte: dt } } };
         }
+        // Geospatial filter: get location IDs via a small schema-qualified raw query (validated)
         if (latitude && longitude) {
             const lat = parseFloat(latitude);
             const lng = parseFloat(longitude);
             if (!isNaN(lat) && !isNaN(lng)) {
-                // Approximate 1000 km radius → ~9° (111 km per degree)
                 const km = 1000;
-                const deg = km / 111;
-                whereConditions.push(client_1.Prisma.sql `ST_DWithin(
-            l.coordinates::geometry,
-            ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326),
-            ${deg}
-          )`);
+                const deg = km / 111; // approximate
+                const schema = getDbSchema(); // validated
+                // safe to build SQL because schema validated above
+                const sql = `
+          SELECT id
+          FROM "${schema}"."Location"
+          WHERE ST_DWithin(coordinates::geometry, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326), ${deg})
+        `;
+                const rows = (yield prisma.$queryRawUnsafe(sql));
+                const locIds = rows.map((r) => r.id);
+                if (locIds.length === 0) {
+                    res.status(200).json([]); // nothing nearby
+                    return;
+                }
+                where.locationId = { in: locIds };
             }
         }
-        // Construct full SQL. Join Property (p) and Location (l).
-        const completeQuery = client_1.Prisma.sql `
-      SELECT
-        p.*,
-        json_build_object(
-          'id',   l.id,
-          'address',    l.address,
-          'city',       l.city,
-          'state',      l.state,
-          'country',    l.country,
-          'postalCode', l."postalCode",
-          'coordinates', json_build_object(
-            'longitude', ST_X(l."coordinates"::geometry),
-            'latitude',  ST_Y(l."coordinates"::geometry)
-          )
-        ) as location
-      FROM "Property" p
-      JOIN "Location" l ON p."locationId" = l.id
-      ${whereConditions.length > 0
-            ? client_1.Prisma.sql `WHERE ${client_1.Prisma.join(whereConditions, " AND ")}`
-            : client_1.Prisma.empty}
-    `;
-        const properties = yield prisma.$queryRaw(completeQuery);
+        const properties = yield prisma.property.findMany({
+            where,
+            include: {
+                location: true,
+                manager: true,
+            },
+        });
         res.status(200).json(properties);
     }
-    catch (error) {
-        console.error("Error retrieving properties:", error);
+    catch (err) {
+        console.error("Error retrieving properties:", err);
         res
             .status(500)
-            .json({ message: `Error retrieving properties: ${error.message}` });
+            .json({ message: `Error retrieving properties: ${err.message}` });
     }
 });
 exports.getProperties = getProperties;
@@ -184,11 +176,12 @@ const getProperty = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             return;
         }
         // Fetch WKT from Location, convert to GeoJSON
-        const coordsResult = (yield prisma.$queryRaw `
-      SELECT ST_AsText(coordinates) AS coordinates
-      FROM "Location"
-      WHERE id = ${property.location.id}
-    `);
+        const schema = getDbSchema();
+        const coordsResult = (yield prisma.$queryRawUnsafe(`
+    SELECT ST_AsText(coordinates) AS coordinates
+    FROM "${schema}"."Location"
+    WHERE id = ${property.location.id}
+  `));
         const wkt = ((_a = coordsResult[0]) === null || _a === void 0 ? void 0 : _a.coordinates) || "";
         let geoJSON = {};
         let [lng, lat] = [0, 0];
@@ -240,18 +233,13 @@ const createProperty = (req, res) => __awaiter(void 0, void 0, void 0, function*
             lat = parseFloat(geoResp.data[0].lat);
         }
         // 2) Insert Location
-        const [newLocation] = (yield prisma.$queryRaw `
-      INSERT INTO "Location" (address, city, state, country, "postalCode", coordinates)
-      VALUES (
-        ${address},
-        ${city},
-        ${state},
-        ${country},
-        ${postalCode},
-        ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)
-      )
+        const schema = getDbSchema();
+        const insertSql = `
+      INSERT INTO "${schema}"."Location" (address, city, state, country, "postalCode", coordinates)
+      VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326))
       RETURNING id, address, city, state, country, "postalCode", ST_AsText(coordinates) as coordinates;
-    `);
+    `;
+        const [newLocation] = (yield prisma.$queryRawUnsafe(insertSql, address, city, state, country, postalCode, lon, lat));
         // 3) Upload each file to S3 and collect its public URL
         // const photoUrls: string[] = [];
         // if (files && files.length) {
