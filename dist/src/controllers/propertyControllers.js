@@ -42,13 +42,42 @@ function getDbSchema() {
     if (!schema) {
         // If still missing, fallback to 'public' (but log so you can notice)
         console.warn("DB schema not provided; defaulting to 'public'. Set DB_SCHEMA in your .env");
-        schema = "public  ";
+        schema = "public";
     }
     // Validate to avoid SQL injection when we inject schema into SQL strings
     if (!/^[a-zA-Z0-9_]+$/.test(schema)) {
         throw new Error(`Invalid DB schema name: ${schema}`);
     }
     return schema;
+}
+// PostGIS schema / function detector (cached)
+let _postgisSchema = null;
+function detectPostgisSchema() {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a;
+        if (_postgisSchema)
+            return _postgisSchema;
+        try {
+            // First look for the schema that contains the st_makepoint function
+            const res = (yield prisma.$queryRawUnsafe(`SELECT n.nspname AS schema
+       FROM pg_proc p
+       JOIN pg_namespace n ON p.pronamespace = n.oid
+       WHERE p.proname = 'st_makepoint'
+       LIMIT 1`));
+            const schema = (((_a = res === null || res === void 0 ? void 0 : res[0]) === null || _a === void 0 ? void 0 : _a.schema) || "public").trim();
+            if (!/^[a-zA-Z0-9_]+$/.test(schema)) {
+                throw new Error("invalid postgis schema detected");
+            }
+            _postgisSchema = schema;
+            console.log("Detected PostGIS schema:", _postgisSchema);
+            return _postgisSchema;
+        }
+        catch (err) {
+            console.warn("Failed to detect PostGIS schema, defaulting to public", err);
+            _postgisSchema = "public";
+            return _postgisSchema;
+        }
+    });
 }
 // Initialize S3 client (ensure AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET_NAME are set in .env)
 if (!process.env.AWS_REGION) {
@@ -125,41 +154,15 @@ const getProperties = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                     : 5;
                 const meters = Math.round(radiusKm * 1000);
                 const schema = getDbSchema(); // validated
-                // Cache for detected postgis schema
-                let _postgisSchema = null;
-                function detectPostgisSchema() {
-                    return __awaiter(this, void 0, void 0, function* () {
-                        var _a;
-                        if (_postgisSchema)
-                            return _postgisSchema;
-                        try {
-                            // Find the schema that contains the 'geography' type
-                            const res = (yield prisma.$queryRawUnsafe(`SELECT n.nspname AS schema
-              FROM pg_type t
-              JOIN pg_namespace n ON t.typnamespace = n.oid
-              WHERE t.typname = 'geography'
-              LIMIT 1`));
-                            const schema = ((_a = res === null || res === void 0 ? void 0 : res[0]) === null || _a === void 0 ? void 0 : _a.schema) || "public";
-                            _postgisSchema = schema;
-                            console.log("Detected PostGIS schema:", _postgisSchema);
-                            return _postgisSchema;
-                        }
-                        catch (err) {
-                            console.warn("Failed to detect PostGIS schema, defaulting to public", err);
-                            _postgisSchema = "public";
-                            return _postgisSchema;
-                        }
-                    });
-                }
                 // Parameterized query: $1 = lng, $2 = lat, $3 = meters
                 // Use ::geography for the point so ST_DWithin's distance is in meters.
                 const postgisSchema = yield detectPostgisSchema();
                 const sql = `
-          SELECT id
+         SELECT id
           FROM "${schema}"."Location"
           WHERE ST_DWithin(
             coordinates,
-            ST_SetSRID(ST_MakePoint($1::double precision, $2::double precision), 4326)::${postgisSchema}.geography,
+            ST_SetSRID(${postgisSchema}.st_makepoint($1::double precision, $2::double precision), 4326)::${postgisSchema}.geography,
             $3
           )
         `;
