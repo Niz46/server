@@ -145,12 +145,14 @@ export const getProperties = async (
           FROM "${schema}"."Location"
           WHERE ST_DWithin(
             coordinates,
-            ST_SetSRID(ST_MakePoint($1, $2), 4326)::project_c.geography,
+            ST_SetSRID(ST_MakePoint($1::double precision, $2::double precision), 4326)::geography,
             $3
           )
         `;
 
-        const rows = (await prisma.$queryRawUnsafe(sql, lng, lat, meters)) as { id: number }[];
+        const rows = (await prisma.$queryRawUnsafe(sql, lng, lat, meters)) as {
+          id: number;
+        }[];
         const locIds = rows.map((r) => r.id);
         if (locIds.length === 0) {
           res.status(200).json([]); // nothing nearby

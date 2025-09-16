@@ -132,7 +132,7 @@ const getProperties = (req, res) => __awaiter(void 0, void 0, void 0, function* 
           FROM "${schema}"."Location"
           WHERE ST_DWithin(
             coordinates,
-            ST_SetSRID(ST_MakePoint($1, $2), 4326)::project_c.geography,
+            ST_SetSRID(ST_MakePoint($1::double precision, $2::double precision), 4326)::geography,
             $3
           )
         `;
