@@ -138,14 +138,45 @@ export const getProperties = async (
 
         const schema = getDbSchema(); // validated
 
+        // Cache for detected postgis schema
+        let _postgisSchema: string | null = null;
+
+        async function detectPostgisSchema(): Promise<string> {
+          if (_postgisSchema) return _postgisSchema;
+          try {
+            // Find the schema that contains the 'geography' type
+            const res = (await prisma.$queryRawUnsafe(
+              `SELECT n.nspname AS schema
+              FROM pg_type t
+              JOIN pg_namespace n ON t.typnamespace = n.oid
+              WHERE t.typname = 'geography'
+              LIMIT 1`
+            )) as { schema?: string }[];
+
+            const schema = res?.[0]?.schema || "public";
+            _postgisSchema = schema;
+            console.log("Detected PostGIS schema:", _postgisSchema);
+            return _postgisSchema;
+          } catch (err) {
+            console.warn(
+              "Failed to detect PostGIS schema, defaulting to public",
+              err
+            );
+            _postgisSchema = "public";
+            return _postgisSchema;
+          }
+        }
+
         // Parameterized query: $1 = lng, $2 = lat, $3 = meters
         // Use ::geography for the point so ST_DWithin's distance is in meters.
+        const postgisSchema = await detectPostgisSchema();
+
         const sql = `
           SELECT id
           FROM "${schema}"."Location"
           WHERE ST_DWithin(
             coordinates,
-            ST_SetSRID(ST_MakePoint($1::double precision, $2::double precision), 4326)::geography,
+            ST_SetSRID(ST_MakePoint($1::double precision, $2::double precision), 4326)::${postgisSchema}.geography,
             $3
           )
         `;

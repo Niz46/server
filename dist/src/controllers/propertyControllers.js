@@ -125,14 +125,41 @@ const getProperties = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                     : 5;
                 const meters = Math.round(radiusKm * 1000);
                 const schema = getDbSchema(); // validated
+                // Cache for detected postgis schema
+                let _postgisSchema = null;
+                function detectPostgisSchema() {
+                    return __awaiter(this, void 0, void 0, function* () {
+                        var _a;
+                        if (_postgisSchema)
+                            return _postgisSchema;
+                        try {
+                            // Find the schema that contains the 'geography' type
+                            const res = (yield prisma.$queryRawUnsafe(`SELECT n.nspname AS schema
+              FROM pg_type t
+              JOIN pg_namespace n ON t.typnamespace = n.oid
+              WHERE t.typname = 'geography'
+              LIMIT 1`));
+                            const schema = ((_a = res === null || res === void 0 ? void 0 : res[0]) === null || _a === void 0 ? void 0 : _a.schema) || "public";
+                            _postgisSchema = schema;
+                            console.log("Detected PostGIS schema:", _postgisSchema);
+                            return _postgisSchema;
+                        }
+                        catch (err) {
+                            console.warn("Failed to detect PostGIS schema, defaulting to public", err);
+                            _postgisSchema = "public";
+                            return _postgisSchema;
+                        }
+                    });
+                }
                 // Parameterized query: $1 = lng, $2 = lat, $3 = meters
                 // Use ::geography for the point so ST_DWithin's distance is in meters.
+                const postgisSchema = yield detectPostgisSchema();
                 const sql = `
           SELECT id
           FROM "${schema}"."Location"
           WHERE ST_DWithin(
             coordinates,
-            ST_SetSRID(ST_MakePoint($1::double precision, $2::double precision), 4326)::geography,
+            ST_SetSRID(ST_MakePoint($1::double precision, $2::double precision), 4326)::${postgisSchema}.geography,
             $3
           )
         `;
