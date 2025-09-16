@@ -158,11 +158,14 @@ const getProperties = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                 // Use ::geography for the point so ST_DWithin's distance is in meters.
                 const postgisSchema = yield detectPostgisSchema();
                 const sql = `
-         SELECT id
+          SELECT id
           FROM "${schema}"."Location"
           WHERE ST_DWithin(
             coordinates,
-            ST_SetSRID(${postgisSchema}.st_makepoint($1::double precision, $2::double precision), 4326)::${postgisSchema}.geography,
+            ${postgisSchema}.st_setsrid(
+              ${postgisSchema}.st_makepoint($1::double precision, $2::double precision),
+              4326
+            )::${postgisSchema}.geography,
             $3
           )
         `;
@@ -272,17 +275,19 @@ const createProperty = (req, res) => __awaiter(void 0, void 0, void 0, function*
         }
         // 2) Insert Location
         const schema = getDbSchema();
+        const postgisSchema = yield detectPostgisSchema();
         const insertSql = `
     INSERT INTO "${schema}"."Location"
       (address, city, state, country, "postalCode", coordinates)
     VALUES
       ($1, $2, $3, $4, $5,
-      ST_SetSRID(
-        ST_MakePoint($6::double precision, $7::double precision),
+      ${postgisSchema}.st_setsrid(
+        ${postgisSchema}.st_makepoint($6::double precision, $7::double precision),
         4326
-      )::project_c.geography)
+      )::${postgisSchema}.geography
+      )
     RETURNING id, address, city, state, country, "postalCode", ST_AsText(coordinates) as coordinates;
-  `;
+    `;
         const [newLocation] = (yield prisma.$queryRawUnsafe(insertSql, address, city, state, country, postalCode, lon, lat));
         // 3) Upload each file to S3 and collect its public URL
         // const photoUrls: string[] = [];

@@ -172,11 +172,14 @@ export const getProperties = async (
         const postgisSchema = await detectPostgisSchema();
 
         const sql = `
-         SELECT id
+          SELECT id
           FROM "${schema}"."Location"
           WHERE ST_DWithin(
             coordinates,
-            ST_SetSRID(${postgisSchema}.st_makepoint($1::double precision, $2::double precision), 4326)::${postgisSchema}.geography,
+            ${postgisSchema}.st_setsrid(
+              ${postgisSchema}.st_makepoint($1::double precision, $2::double precision),
+              4326
+            )::${postgisSchema}.geography,
             $3
           )
         `;
@@ -321,17 +324,21 @@ export const createProperty = async (
 
     // 2) Insert Location
     const schema = getDbSchema();
+    const postgisSchema = await detectPostgisSchema();
+
     const insertSql = `
     INSERT INTO "${schema}"."Location"
       (address, city, state, country, "postalCode", coordinates)
     VALUES
       ($1, $2, $3, $4, $5,
-      ST_SetSRID(
-        ST_MakePoint($6::double precision, $7::double precision),
+      ${postgisSchema}.st_setsrid(
+        ${postgisSchema}.st_makepoint($6::double precision, $7::double precision),
         4326
-      )::project_c.geography)
+      )::${postgisSchema}.geography
+      )
     RETURNING id, address, city, state, country, "postalCode", ST_AsText(coordinates) as coordinates;
-  `;
+    `;
+
     const [newLocation] = (await prisma.$queryRawUnsafe(
       insertSql,
       address,
