@@ -143,32 +143,31 @@ const getProperties = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             if (!isNaN(dt.getTime()))
                 where.leases = { some: { startDate: { lte: dt } } };
         }
-        // Geospatial filter: get location IDs via a small schema-qualified raw query (validated)
+        // --- replace the previous geospatial block with this ---
         if (latitude && longitude) {
             const lat = parseFloat(latitude);
             const lng = parseFloat(longitude);
             if (!isNaN(lat) && !isNaN(lng)) {
-                // default radius (km) can be overridden by ?radiusKm=
                 const radiusKm = !isNaN(Number(req.query.radiusKm))
                     ? Number(req.query.radiusKm)
                     : 5;
+                // Convert meters -> degrees (approx) because we'll use geometry (degrees)
+                // 1 degree ~= 111_320 meters (approx at equator); this is fine for local searches.
                 const meters = radiusKm * 1000;
+                const degrees = meters / 111320;
                 const schema = getDbSchema(); // validated
-                // Use ::geography for the point so ST_DWithin's distance is in meters.
-                const postgisSchema = yield detectPostgisSchema();
+                // Use geometry-based ST_DWithin (unqualified functions) to avoid PostGIS schema/type lookup issues.
+                // Note: geometry in 4326 uses degrees, so we compare degrees not meters.
                 const sql = `
           SELECT id
           FROM "${schema}"."Location"
           WHERE ST_DWithin(
-            coordinates,
-            ${postgisSchema}.st_setsrid(
-              ${postgisSchema}.st_makepoint($1::double precision, $2::double precision),
-              4326
-            )::${postgisSchema}.geography,
+            coordinates::geometry,
+            ST_SetSRID(ST_MakePoint($1::double precision, $2::double precision), 4326)::geometry,
             $3::double precision
           )
         `;
-                const rows = (yield prisma.$queryRawUnsafe(sql, lng, lat, meters));
+                const rows = (yield prisma.$queryRawUnsafe(sql, lng, lat, degrees));
                 const locIds = rows.map((r) => r.id);
                 if (locIds.length === 0) {
                     res.status(200).json([]); // nothing nearby
