@@ -235,10 +235,17 @@ const createProperty = (req, res) => __awaiter(void 0, void 0, void 0, function*
         // 2) Insert Location
         const schema = getDbSchema();
         const insertSql = `
-      INSERT INTO "${schema}"."Location" (address, city, state, country, "postalCode", coordinates)
-      VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326))
-      RETURNING id, address, city, state, country, "postalCode", ST_AsText(coordinates) as coordinates;
-    `;
+    INSERT INTO "${schema}"."Location"
+      (address, city, state, country, "postalCode", coordinates)
+    VALUES
+      ($1, $2, $3, $4, $5,
+      ST_SetSRID(
+        ST_MakePoint($6::double precision, $7::double precision),
+        4326
+      )::geography
+      )
+    RETURNING id, address, city, state, country, "postalCode", ST_AsText(coordinates) as coordinates;
+  `;
         const [newLocation] = (yield prisma.$queryRawUnsafe(insertSql, address, city, state, country, postalCode, lon, lat));
         // 3) Upload each file to S3 and collect its public URL
         // const photoUrls: string[] = [];
