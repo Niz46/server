@@ -73,6 +73,15 @@
   },
   {
     "id": 11,
+    "country": "United States",
+    "city": "Miami Beach",
+    "state": "FL",
+    "address": "5077 N Bay Rd",
+    "postalCode": "33140",
+    "coordinates": "POINT(-80.132 25.8279)"
+  },
+  {
+    "id": 12,
     "country": "Austria",
     "city": "Vienna",
     "state": "Vienna",
@@ -81,7 +90,7 @@
     "coordinates": "POINT(16.373819 48.208174)"
   },
   {
-    "id": 12,
+    "id": 13,
     "country": "Austria",
     "city": "Graz",
     "state": "Styria",
@@ -90,7 +99,7 @@
     "coordinates": "POINT(15.439504 47.070714)"
   },
   {
-    "id": 13,
+    "id": 14,
     "country": "Austria",
     "city": "Linz",
     "state": "Upper Austria",
@@ -99,7 +108,7 @@
     "coordinates": "POINT(14.285830 48.306940)"
   },
   {
-    "id": 14,
+    "id": 15,
     "country": "Austria",
     "city": "Salzburg",
     "state": "Salzburg",
@@ -108,7 +117,7 @@
     "coordinates": "POINT(13.055010 47.809490)"
   },
   {
-    "id": 15,
+    "id": 16,
     "country": "Austria",
     "city": "Innsbruck",
     "state": "Tyrol",
@@ -117,7 +126,7 @@
     "coordinates": "POINT(11.404100 47.269210)"
   },
   {
-    "id": 16,
+    "id": 17,
     "country": "Austria",
     "city": "Klagenfurt",
     "state": "Carinthia",
@@ -126,7 +135,7 @@
     "coordinates": "POINT(14.308830 46.636110)"
   },
   {
-    "id": 17,
+    "id": 18,
     "country": "Austria",
     "city": "Bregenz",
     "state": "Vorarlberg",
@@ -135,7 +144,7 @@
     "coordinates": "POINT(9.747170 47.503570)"
   },
   {
-    "id": 18,
+    "id": 19,
     "country": "Austria",
     "city": "Villach",
     "state": "Carinthia",
@@ -144,7 +153,7 @@
     "coordinates": "POINT(13.855270 46.610550)"
   },
   {
-    "id": 19,
+    "id": 20,
     "country": "Austria",
     "city": "St. Pölten",
     "state": "Lower Austria",
@@ -153,7 +162,7 @@
     "coordinates": "POINT(15.626720 48.203100)"
   },
   {
-    "id": 20,
+    "id": 21,
     "country": "Austria",
     "city": "Dornbirn",
     "state": "Vorarlberg",
@@ -162,7 +171,7 @@
     "coordinates": "POINT(9.741820 47.412450)"
   },
   {
-    "id": 21,
+    "id": 22,
     "country": "Austria",
     "city": "Krems an der Donau",
     "state": "Lower Austria",
@@ -171,7 +180,7 @@
     "coordinates": "POINT(15.620640 48.408160)"
   },
   {
-    "id": 22,
+    "id": 23,
     "country": "Austria",
     "city": "Eisenstadt",
     "state": "Burgenland",
