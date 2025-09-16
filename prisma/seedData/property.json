@@ -288,7 +288,7 @@
     "managerCognitoId": "34f814b8-e0f1-70fb-eff9-5ccb5c69c7df"
   },
   {
-    "id": 21,
+    "id": 13,
     "name": "Vienna Hillside Modern Bungalow",
     "address": "Kahlenberger Straße 22, 1190 Vienna, Austria",
     "description": "Cozy 2 BED bungalow with panoramic city views near Vienna Woods.",
@@ -316,7 +316,7 @@
     "managerCognitoId": "34f814b8-e0f1-70fb-eff9-5ccb5c69c7df"
   },
   {
-    "id": 22,
+    "id": 14,
     "name": "Vienna Riverside Condo",
     "address": "Franz-Josefs-Kai 45, 1010 Vienna, Austria",
     "description": "1 BED condo near the Danube Canal, river views from the balcony.",
@@ -349,7 +349,7 @@
     "managerCognitoId": "34f814b8-e0f1-70fb-eff9-5ccb5c69c7df"
   },
   {
-    "id": 23,
+    "id": 15,
     "name": "Vienna City Studio Near Museumsquartier",
     "address": "Museumsplatz 1, 1070 Vienna, Austria",
     "description": "Compact studio apartment near the MuseumsQuartier, fully furnished.",
@@ -382,7 +382,7 @@
     "managerCognitoId": "34f814b8-e0f1-70fb-eff9-5ccb5c69c7df"
   },
   {
-    "id": 24,
+    "id": 16,
     "name": "Downtown Vienna Brick Loft",
     "address": "Schottenring 12, 1010 Vienna, Austria",
     "description": "Stylish 2 BED loft with exposed brick and floor-to-ceiling windows near Ringstraße.",
@@ -410,7 +410,7 @@
     "managerCognitoId": "34f814b8-e0f1-70fb-eff9-5ccb5c69c7df"
   },
   {
-    "id": 25,
+    "id": 17,
     "name": "Vienna Schönbrunn Luxury Villa",
     "address": "Schönbrunner Schlossstraße 47, 1130 Vienna, Austria",
     "description": "3 BED luxury villa near Schönbrunn Palace with a private pool and landscaped yard.",

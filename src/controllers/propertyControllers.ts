@@ -22,7 +22,7 @@ function getDbSchema(): string {
     console.warn(
       "DB schema not provided; defaulting to 'public'. Set DB_SCHEMA in your .env"
     );
-    schema = "public";
+    schema = "public  ";
   }
 
   // Validate to avoid SQL injection when we inject schema into SQL strings
@@ -130,17 +130,27 @@ export const getProperties = async (
       const lat = parseFloat(latitude as string);
       const lng = parseFloat(longitude as string);
       if (!isNaN(lat) && !isNaN(lng)) {
-        const km = 1000;
-        const deg = km / 111; // approximate
+        // default radius (km) can be overridden by ?radiusKm=
+        const radiusKm = !isNaN(Number(req.query.radiusKm))
+          ? Number(req.query.radiusKm)
+          : 5;
+        const meters = Math.round(radiusKm * 1000);
 
         const schema = getDbSchema(); // validated
-        // safe to build SQL because schema validated above
+
+        // Parameterized query: $1 = lng, $2 = lat, $3 = meters
+        // Use ::geography for the point so ST_DWithin's distance is in meters.
         const sql = `
           SELECT id
           FROM "${schema}"."Location"
-          WHERE ST_DWithin(coordinates::geometry, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326), ${deg})
+          WHERE ST_DWithin(
+            coordinates,
+            ST_SetSRID(ST_MakePoint($1, $2), 4326)::project_c.geography,
+            $3
+          )
         `;
-        const rows = (await prisma.$queryRawUnsafe(sql)) as { id: number }[];
+
+        const rows = (await prisma.$queryRawUnsafe(sql, lng, lat, meters)) as { id: number }[];
         const locIds = rows.map((r) => r.id);
         if (locIds.length === 0) {
           res.status(200).json([]); // nothing nearby
@@ -284,8 +294,9 @@ export const createProperty = async (
     VALUES
       ($1, $2, $3, $4, $5,
       ST_SetSRID(
-      ST_MakePoint($6::double precision, $7::double precision),
-      4326)::project_c.geography)
+        ST_MakePoint($6::double precision, $7::double precision),
+        4326
+      )::project_c.geography)
     RETURNING id, address, city, state, country, "postalCode", ST_AsText(coordinates) as coordinates;
   `;
     const [newLocation] = (await prisma.$queryRawUnsafe(

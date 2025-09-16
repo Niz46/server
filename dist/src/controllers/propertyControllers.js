@@ -42,7 +42,7 @@ function getDbSchema() {
     if (!schema) {
         // If still missing, fallback to 'public' (but log so you can notice)
         console.warn("DB schema not provided; defaulting to 'public'. Set DB_SCHEMA in your .env");
-        schema = "public";
+        schema = "public  ";
     }
     // Validate to avoid SQL injection when we inject schema into SQL strings
     if (!/^[a-zA-Z0-9_]+$/.test(schema)) {
@@ -119,16 +119,24 @@ const getProperties = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             const lat = parseFloat(latitude);
             const lng = parseFloat(longitude);
             if (!isNaN(lat) && !isNaN(lng)) {
-                const km = 1000;
-                const deg = km / 111; // approximate
+                // default radius (km) can be overridden by ?radiusKm=
+                const radiusKm = !isNaN(Number(req.query.radiusKm))
+                    ? Number(req.query.radiusKm)
+                    : 5;
+                const meters = Math.round(radiusKm * 1000);
                 const schema = getDbSchema(); // validated
-                // safe to build SQL because schema validated above
+                // Parameterized query: $1 = lng, $2 = lat, $3 = meters
+                // Use ::geography for the point so ST_DWithin's distance is in meters.
                 const sql = `
           SELECT id
           FROM "${schema}"."Location"
-          WHERE ST_DWithin(coordinates::geometry, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326), ${deg})
+          WHERE ST_DWithin(
+            coordinates,
+            ST_SetSRID(ST_MakePoint($1, $2), 4326)::project_c.geography,
+            $3
+          )
         `;
-                const rows = (yield prisma.$queryRawUnsafe(sql));
+                const rows = (yield prisma.$queryRawUnsafe(sql, lng, lat, meters));
                 const locIds = rows.map((r) => r.id);
                 if (locIds.length === 0) {
                     res.status(200).json([]); // nothing nearby
@@ -240,8 +248,9 @@ const createProperty = (req, res) => __awaiter(void 0, void 0, void 0, function*
     VALUES
       ($1, $2, $3, $4, $5,
       ST_SetSRID(
-      ST_MakePoint($6::double precision, $7::double precision),
-      4326)::project_c.geography)
+        ST_MakePoint($6::double precision, $7::double precision),
+        4326
+      )::project_c.geography)
     RETURNING id, address, city, state, country, "postalCode", ST_AsText(coordinates) as coordinates;
   `;
         const [newLocation] = (yield prisma.$queryRawUnsafe(insertSql, address, city, state, country, postalCode, lon, lat));

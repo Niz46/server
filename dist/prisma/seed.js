@@ -217,25 +217,25 @@ function main() {
         for (const loc of locations) {
             try {
                 yield prisma.$executeRaw `
-        INSERT INTO "Location" (
-          id,
-          address,
-          city,
-          state,
-          country,
-          "postalCode",
-          coordinates
-        )
-        VALUES (
-          ${loc.id},
-          ${loc.address},
-          ${loc.city},
-          ${loc.state},
-          ${loc.country},
-          ${loc.postalCode},
-          ST_GeomFromText(${loc.coordinates}, 4326)
-        );
-      `;
+      INSERT INTO "Location" (
+        id,
+        address,
+        city,
+        state,
+        country,
+        "postalCode",
+        coordinates
+      )
+      VALUES (
+        ${loc.id},
+        ${loc.address},
+        ${loc.city},
+        ${loc.state},
+        ${loc.country},
+        ${loc.postalCode},
+        ST_GeomFromText(${loc.coordinates}, 4326)::geography
+      );
+    `;
                 console.log(`Inserted location for ${loc.city}`);
             }
             catch (err) {
