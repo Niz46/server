@@ -163,11 +163,11 @@ export const getProperties = async (
         const radiusKm = !isNaN(Number(req.query.radiusKm))
           ? Number(req.query.radiusKm)
           : 5;
-        const meters = Math.round(radiusKm * 1000);
+
+        const meters = radiusKm * 1000;
 
         const schema = getDbSchema(); // validated
-
-        // Parameterized query: $1 = lng, $2 = lat, $3 = meters
+        
         // Use ::geography for the point so ST_DWithin's distance is in meters.
         const postgisSchema = await detectPostgisSchema();
 
@@ -180,7 +180,7 @@ export const getProperties = async (
               ${postgisSchema}.st_makepoint($1::double precision, $2::double precision),
               4326
             )::${postgisSchema}.geography,
-            $3
+            $3::double precision
           )
         `;
 
