@@ -284,10 +284,8 @@ export const createProperty = async (
     VALUES
       ($1, $2, $3, $4, $5,
       ST_SetSRID(
-        ST_MakePoint($6::double precision, $7::double precision),
-        4326
-      )::geography
-      )
+      ST_MakePoint($6::double precision, $7::double precision),
+      4326)::project_c.geography)
     RETURNING id, address, city, state, country, "postalCode", ST_AsText(coordinates) as coordinates;
   `;
     const [newLocation] = (await prisma.$queryRawUnsafe(
