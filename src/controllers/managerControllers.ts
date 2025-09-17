@@ -3,32 +3,6 @@ import { PrismaClient } from "@prisma/client";
 import { wktToGeoJSON } from "@terraformer/wkt";
 
 const prisma = new PrismaClient();
-/**
- * Return the DB schema name to use. Prefer env var DB_SCHEMA, then parse DATABASE_URL.
- * Validates the result to avoid SQL injection when interpolating schema names into SQL.
- */
-function getDbSchema(): string {
-  let schema = (process.env.DB_SCHEMA || "").trim();
-
-  if (!schema && process.env.DATABASE_URL) {
-    const m = process.env.DATABASE_URL.match(/[?&]schema=([a-zA-Z0-9_]+)/);
-    if (m) schema = m[1];
-  }
-
-  if (!schema) {
-    console.warn(
-      "DB schema not provided; defaulting to 'public'. Set DB_SCHEMA in .env"
-    );
-    schema = "public";
-  }
-
-  // simple validation: only allow alphanumeric and underscore
-  if (!/^[a-zA-Z0-9_]+$/.test(schema)) {
-    throw new Error(`Invalid DB schema name: ${schema}`);
-  }
-
-  return schema;
-}
 
 export const getManager = async (
   req: Request,
@@ -114,78 +88,30 @@ export const getManagerProperties = async (
       },
     });
 
-    const schema = getDbSchema(); // validated schema name
-
     const propertiesWithFormattedLocation = await Promise.all(
       properties.map(async (property) => {
-        try {
-          // If location is missing for some reason, skip the raw query and return property as-is
-          if (
-            !property.location ||
-            property.location.id === undefined ||
-            property.location.id === null
-          ) {
-            return property;
-          }
+        const coordinates: { coordinates: string }[] =
+          await prisma.$queryRaw`SELECT ST_asText(coordinates) as coordinates from "Location" where id = ${property.location.id}`;
 
-          // Schema is validated in getDbSchema(), so it's safe to interpolate here
-          const sql = `
-            SELECT ST_AsText(coordinates) AS coordinates
-            FROM "${schema}"."Location"
-            WHERE id = $1
-            LIMIT 1
-          `;
+        const geoJSON: any = wktToGeoJSON(coordinates[0]?.coordinates || "");
+        const longitude = geoJSON.coordinates[0];
+        const latitude = geoJSON.coordinates[1];
 
-          // Pass the id as a parameter to avoid injection in values
-          const coordsResult = (await prisma.$queryRawUnsafe<
-            { coordinates: string }[]
-          >(sql, property.location.id)) as { coordinates: string }[];
-
-          const wkt = coordsResult?.[0]?.coordinates || "";
-          let geoJSON: any = {};
-          let longitude = 0;
-          let latitude = 0;
-
-          if (wkt) {
-            try {
-              geoJSON = wktToGeoJSON(wkt);
-              // wktToGeoJSON returns [lon, lat] for Point
-              if (
-                Array.isArray(geoJSON.coordinates) &&
-                geoJSON.coordinates.length >= 2
-              ) {
-                longitude = geoJSON.coordinates[0];
-                latitude = geoJSON.coordinates[1];
-              }
-            } catch (e) {
-              console.warn(
-                `WKT -> GeoJSON conversion failed for location id=${property.location.id}`,
-                e
-              );
-            }
-          }
-
-          return {
-            ...property,
-            location: {
-              ...property.location,
-              coordinates: { longitude, latitude },
+        return {
+          ...property,
+          location: {
+            ...property.location,
+            coordinates: {
+              longitude,
+              latitude,
             },
-          };
-        } catch (innerErr) {
-          // Don't fail the whole response because of a single location; log and return property as-is
-          console.error(
-            `Failed to format location for property id=${property.id}:`,
-            innerErr
-          );
-          return property;
-        }
+          },
+        };
       })
     );
 
     res.json(propertiesWithFormattedLocation);
   } catch (err: any) {
-    console.error("Error retrieving manager properties:", err);
     res
       .status(500)
       .json({ message: `Error retrieving manager properties: ${err.message}` });

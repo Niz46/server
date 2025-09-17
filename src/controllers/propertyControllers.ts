@@ -10,13 +10,17 @@ import axios from "axios";
 const prisma = new PrismaClient();
 
 // Initialize S3 client (ensure AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET_NAME are set in .env)
+// NOTE: Do NOT crash the process if AWS_REGION is absent — S3 is optional in local/dev.
+let s3Client: S3Client | undefined;
 if (!process.env.AWS_REGION) {
-  console.error("Missing AWS_REGION in environment");
-  process.exit(1);
+  console.warn(
+    "AWS_REGION is not set; S3 uploads will be disabled. Set AWS_REGION + credentials in .env to enable S3 uploads."
+  );
+} else {
+  s3Client = new S3Client({
+    region: process.env.AWS_REGION,
+  });
 }
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION,
-});
 
 /**
  * GET /properties
@@ -124,18 +128,20 @@ export const getProperties = async (
       }
     }
 
+    // Spatial filter — use geography & meters (robust)
     if (latitude && longitude) {
       const lat = parseFloat(latitude as string);
       const lng = parseFloat(longitude as string);
       if (!isNaN(lat) && !isNaN(lng)) {
-        // Approximate 1000 km radius → ~9° (111 km per degree)
+        // radius in kilometers (adjustable)
         const km = 1000;
-        const deg = km / 111;
+        const meters = Math.round(km * 1000);
+
         whereConditions.push(
           Prisma.sql`ST_DWithin(
-            l.coordinates::geometry,
-            ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326),
-            ${deg}
+            l.coordinates::geography,
+            ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography,
+            ${meters}
           )`
         );
       }
@@ -260,64 +266,126 @@ export const createProperty = async (
       ...propertyData
     } = req.body;
 
-    // 1) Geocode via Nominatim
-    const geocodeURL = `https://nominatim.openstreetmap.org/search?${new URLSearchParams(
-      {
-        street: address,
-        city,
-        country,
-        postalcode: postalCode,
-        format: "json",
-        limit: "1",
+    // Resolve coordinates: accept client-provided coords first, else try geocoding
+    let lon: number | null = null;
+    let lat: number | null = null;
+
+    // Accept explicit client coordinates (recommended for reliability)
+    if (req.body.longitude && req.body.latitude) {
+      const parsedLon = parseFloat(req.body.longitude as string);
+      const parsedLat = parseFloat(req.body.latitude as string);
+      if (!isNaN(parsedLon) && !isNaN(parsedLat)) {
+        lon = parsedLon;
+        lat = parsedLat;
+        console.info("Using client-provided coordinates:", { lon, lat });
       }
-    ).toString()}`;
-
-    const geoResp = await axios.get(geocodeURL, {
-      headers: { "User-Agent": "RealEstateApp (you@example.com)" },
-    });
-
-    let [lon, lat] = [0, 0];
-    if (geoResp.data[0]?.lon && geoResp.data[0]?.lat) {
-      lon = parseFloat(geoResp.data[0].lon);
-      lat = parseFloat(geoResp.data[0].lat);
     }
 
-    // 2) Insert Location
-    const [newLocation] = (await prisma.$queryRaw<Location[]>`
-      INSERT INTO "Location" (address, city, state, country, "postalCode", coordinates)
-      VALUES (
-        ${address},
-        ${city},
-        ${state},
-        ${country},
-        ${postalCode},
-        ST_SetSRID(ST_MakePoint(${lon}::double precision, ${lat}::double precision), 4326)
-      )
-      RETURNING id, address, city, state, country, "postalCode", ST_AsText(coordinates) as coordinates;
-    `) as Location[];
+    // Otherwise call Nominatim (best-effort)
+    if (lon === null || lat === null) {
+      const geocodeURL = `https://nominatim.openstreetmap.org/search?${new URLSearchParams(
+        {
+          street: address ?? "",
+          city: city ?? "",
+          state: state ?? "",
+          country: country ?? "",
+          postalcode: postalCode ?? "",
+          format: "json",
+          limit: "1",
+        }
+      ).toString()}`;
 
-    // 3) Upload each file to S3 and collect its public URL
+      try {
+        const geoResp = await axios.get(geocodeURL, {
+          headers: { "User-Agent": "RealEstateApp (you@example.com)" },
+          timeout: 5000,
+        });
+
+        if (geoResp && Array.isArray(geoResp.data) && geoResp.data[0]) {
+          const first = geoResp.data[0];
+          const parsedLon = parseFloat(first.lon);
+          const parsedLat = parseFloat(first.lat);
+          if (!isNaN(parsedLon) && !isNaN(parsedLat)) {
+            lon = parsedLon;
+            lat = parsedLat;
+            console.info("Nominatim geocode success:", { lon, lat });
+          } else {
+            console.warn("Nominatim returned invalid lat/lon:", first);
+          }
+        } else {
+          console.warn("Nominatim returned no result for address:", {
+            address,
+            city,
+            state,
+            country,
+            postalCode,
+            geocodeURL,
+          });
+        }
+      } catch (err: any) {
+        console.warn("Geocoding request failed:", err?.message || err);
+      }
+    }
+
+    // If we still don't have coordinates, fail-fast (prevents silent 0,0 inserts)
+    if (
+      lon === null ||
+      lat === null ||
+      Number.isNaN(lon) ||
+      Number.isNaN(lat)
+    ) {
+      res.status(400).json({
+        message:
+          "Could not determine coordinates for the address. Provide latitude and longitude or check geocoding provider.",
+      });
+      return;
+    }
+
+    // 2) Insert Location (parameterized)
+    const insertSql = `
+      INSERT INTO "Location" (address, city, state, country, "postalCode", coordinates)
+      VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6::double precision, $7::double precision), 4326))
+      RETURNING id, address, city, state, country, "postalCode", ST_AsText(coordinates) as coordinates;
+    `;
+
+    const newLocationRows = (await prisma.$queryRawUnsafe<any[]>(
+      insertSql,
+      address,
+      city,
+      state,
+      country,
+      postalCode,
+      lon,
+      lat
+    )) as any[];
+
+    const newLocation = newLocationRows?.[0] as Location | undefined;
+
+    if (!newLocation || !newLocation.id) {
+      throw new Error("Failed to insert Location row");
+    }
+
+    // 3) Upload files to S3 if enabled (kept commented out if you don't use S3)
     // const photoUrls: string[] = [];
     // if (files && files.length) {
-    //   if (!process.env.S3_BUCKET_NAME) {
-    //     throw new Error("Missing S3_BUCKET_NAME in environment");
+    //   if (!process.env.S3_BUCKET_NAME || !s3Client) {
+    //     throw new Error("Missing S3_BUCKET_NAME or S3 client not initialized");
     //   }
     //   for (const file of files) {
     //     const key = `properties/${Date.now()}-${file.originalname}`;
     //     const uploadParams = {
-    //       Bucket: process.env.S3_BUCKET_NAME!, // non-null assertion
+    //       Bucket: process.env.S3_BUCKET_NAME!,
     //       Key: key,
     //       Body: file.buffer,
     //       ContentType: file.mimetype,
     //     };
-
+    //
     //     const uploadWatch = new Upload({
     //       client: s3Client,
     //       params: uploadParams,
     //     });
-
+    //
     //     const uploadResult = await uploadWatch.done();
-    //     // uploadResult.Location is the public URL (if bucket is public)
     //     if (uploadResult.Location) {
     //       photoUrls.push(uploadResult.Location);
     //     }
@@ -330,7 +398,7 @@ export const createProperty = async (
         ...propertyData,
         locationId: newLocation.id,
         managerCognitoId,
-        // photoUrls, // URLs returned by S3 (empty array if none)
+        // photoUrls,
         amenities:
           typeof propertyData.amenities === "string"
             ? propertyData.amenities.split(",").map((s: string) => s.trim())
@@ -341,12 +409,20 @@ export const createProperty = async (
             : [],
         isPetsAllowed: propertyData.isPetsAllowed === "true",
         isParkingIncluded: propertyData.isParkingIncluded === "true",
-        pricePerMonth: parseFloat(propertyData.pricePerMonth),
-        securityDeposit: parseFloat(propertyData.securityDeposit),
-        applicationFee: parseFloat(propertyData.applicationFee),
-        beds: parseInt(propertyData.beds, 10),
-        baths: parseFloat(propertyData.baths),
-        squareFeet: parseInt(propertyData.squareFeet, 10),
+        pricePerMonth: propertyData.pricePerMonth
+          ? parseFloat(propertyData.pricePerMonth)
+          : undefined,
+        securityDeposit: propertyData.securityDeposit
+          ? parseFloat(propertyData.securityDeposit)
+          : undefined,
+        applicationFee: propertyData.applicationFee
+          ? parseFloat(propertyData.applicationFee)
+          : undefined,
+        beds: propertyData.beds ? parseInt(propertyData.beds, 10) : undefined,
+        baths: propertyData.baths ? parseFloat(propertyData.baths) : undefined,
+        squareFeet: propertyData.squareFeet
+          ? parseInt(propertyData.squareFeet, 10)
+          : undefined,
       },
       include: {
         location: true,
@@ -429,10 +505,10 @@ export const updateProperty = async (
       toUpdate.isParkingIncluded = updatedData.isParkingIncluded === "true";
     }
 
-    // Upload new files if provided
+    // Upload new files if provided (S3 client must be configured)
     // if (files && files.length) {
-    //   if (!process.env.S3_BUCKET_NAME) {
-    //     throw new Error("Missing S3_BUCKET_NAME in environment");
+    //   if (!process.env.S3_BUCKET_NAME || !s3Client) {
+    //     throw new Error("Missing S3_BUCKET_NAME or S3 client not initialized");
     //   }
     //   const newPhotoUrls: string[] = [];
     //   for (const file of files) {
@@ -443,12 +519,12 @@ export const updateProperty = async (
     //       Body: file.buffer,
     //       ContentType: file.mimetype,
     //     };
-
+    //
     //     const uploadWatch = new Upload({
     //       client: s3Client,
     //       params: uploadParams,
     //     });
-
+    //
     //     const uploadResult = await uploadWatch.done();
     //     if (uploadResult.Location) {
     //       newPhotoUrls.push(uploadResult.Location);

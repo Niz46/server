@@ -1,87 +1,6 @@
 [
   {
     "id": 1,
-    "country": "United States",
-    "city": "Pasadena",
-    "state": "CA",
-    "address": "123 Colorado Blvd",
-    "postalCode": "91105",
-    "coordinates": "POINT(-118.144516 34.147785)"
-  },
-  {
-    "id": 2,
-    "country": "United States",
-    "city": "Santa Monica",
-    "state": "CA",
-    "address": "456 Ocean Ave",
-    "postalCode": "90401",
-    "coordinates": "POINT(-118.496513 34.013654)"
-  },
-  {
-    "id": 3,
-    "country": "United States",
-    "city": "Burbank",
-    "state": "CA",
-    "address": "789 Hollywood Way",
-    "postalCode": "91505",
-    "coordinates": "POINT(-118.328661 34.180839)"
-  },
-  {
-    "id": 4,
-    "country": "United States",
-    "city": "Long Beach",
-    "state": "CA",
-    "address": "101 Pine Ave",
-    "postalCode": "90802",
-    "coordinates": "POINT(-118.192604 33.766720)"
-  },
-  {
-    "id": 5,
-    "country": "United States",
-    "city": "Malibu",
-    "state": "CA",
-    "address": "888 Malibu Road",
-    "postalCode": "90265",
-    "coordinates": "POINT(-118.774518 34.025922)"
-  },
-  {
-    "id": 6,
-    "country": "United States",
-    "city": "Glendale",
-    "state": "CA",
-    "address": "777 Brand Blvd",
-    "postalCode": "91203",
-    "coordinates": "POINT(-118.254708 34.142508)"
-  },
-  {
-    "id": 7,
-    "country": "United States",
-    "city": "Torrance",
-    "state": "CA",
-    "address": "555 Torrance Blvd",
-    "postalCode": "90503",
-    "coordinates": "POINT(-118.352575 33.835849)"
-  },
-  {
-    "id": 8,
-    "country": "United States",
-    "city": "Beverly Hills",
-    "state": "CA",
-    "address": "789 Rodeo Dr",
-    "postalCode": "90210",
-    "coordinates": "POINT(-118.400356 34.073620)"
-  },
-  {
-    "id": 9,
-    "country": "United States",
-    "city": "Miami Beach",
-    "state": "FL",
-    "address": "5077 N Bay Rd",
-    "postalCode": "33140",
-    "coordinates": "POINT(-80.132 25.8279)"
-  },
-  {
-    "id": 10,
     "country": "Austria",
     "city": "Vienna",
     "state": "Vienna",
@@ -90,7 +9,7 @@
     "coordinates": "POINT(16.373819 48.208174)"
   },
   {
-    "id": 11,
+    "id": 2,
     "country": "Austria",
     "city": "Graz",
     "state": "Styria",
@@ -99,7 +18,7 @@
     "coordinates": "POINT(15.439504 47.070714)"
   },
   {
-    "id": 12,
+    "id": 3,
     "country": "Austria",
     "city": "Linz",
     "state": "Upper Austria",
@@ -108,7 +27,7 @@
     "coordinates": "POINT(14.285830 48.306940)"
   },
   {
-    "id": 13,
+    "id": 4,
     "country": "Austria",
     "city": "Salzburg",
     "state": "Salzburg",
@@ -117,16 +36,7 @@
     "coordinates": "POINT(13.055010 47.809490)"
   },
   {
-    "id": 14,
-    "country": "Austria",
-    "city": "Innsbruck",
-    "state": "Tyrol",
-    "address": "Maria-Theresien-Straße 13",
-    "postalCode": "6020",
-    "coordinates": "POINT(11.404100 47.269210)"
-  },
-  {
-    "id": 15,
+    "id": 5,
     "country": "Austria",
     "city": "Klagenfurt",
     "state": "Carinthia",
@@ -135,16 +45,7 @@
     "coordinates": "POINT(14.308830 46.636110)"
   },
   {
-    "id": 16,
-    "country": "Austria",
-    "city": "Bregenz",
-    "state": "Vorarlberg",
-    "address": "Marktstraße 3",
-    "postalCode": "6900",
-    "coordinates": "POINT(9.747170 47.503570)"
-  },
-  {
-    "id": 17,
+    "id": 6,
     "country": "Austria",
     "city": "Villach",
     "state": "Carinthia",
@@ -153,16 +54,16 @@
     "coordinates": "POINT(13.855270 46.610550)"
   },
   {
-    "id": 18,
+    "id": 7,
     "country": "Austria",
-    "city": "St. Pölten",
-    "state": "Lower Austria",
-    "address": "Landhausplatz 1",
-    "postalCode": "3100",
-    "coordinates": "POINT(15.626720 48.203100)"
+    "city": "Wels",
+    "state": "Upper Austria",
+    "address": "Stadtplatz 1",
+    "postalCode": "4600",
+    "coordinates": "POINT(14.0333 48.1667)"
   },
   {
-    "id": 19,
+    "id": 8,
     "country": "Austria",
     "city": "Dornbirn",
     "state": "Vorarlberg",
@@ -171,7 +72,134 @@
     "coordinates": "POINT(9.741820 47.412450)"
   },
   {
+    "id": 9,
+    "country": "Austria",
+    "city": "Wiener Neustadt",
+    "state": "Lower Austria",
+    "address": "Hauptplatz 1",
+    "postalCode": "2700",
+    "coordinates": "POINT(16.2500 47.8170)"
+  },
+  {
+    "id": 10,
+    "country": "Austria",
+    "city": "Steyr",
+    "state": "Upper Austria",
+    "address": "Hauptplatz 3",
+    "postalCode": "4400",
+    "coordinates": "POINT(14.4213 48.0427)"
+  },
+
+  {
+    "id": 11,
+    "country": "United States",
+    "city": "Pasadena",
+    "state": "CA",
+    "address": "123 Colorado Blvd",
+    "postalCode": "91105",
+    "coordinates": "POINT(-118.144516 34.147785)"
+  },
+  {
+    "id": 12,
+    "country": "United States",
+    "city": "Santa Monica",
+    "state": "CA",
+    "address": "456 Ocean Ave",
+    "postalCode": "90401",
+    "coordinates": "POINT(-118.496513 34.013654)"
+  },
+  {
+    "id": 13,
+    "country": "United States",
+    "city": "Burbank",
+    "state": "CA",
+    "address": "789 Hollywood Way",
+    "postalCode": "91505",
+    "coordinates": "POINT(-118.328661 34.180839)"
+  },
+  {
+    "id": 14,
+    "country": "United States",
+    "city": "Long Beach",
+    "state": "CA",
+    "address": "101 Pine Ave",
+    "postalCode": "90802",
+    "coordinates": "POINT(-118.192604 33.766720)"
+  },
+  {
+    "id": 15,
+    "country": "United States",
+    "city": "Malibu",
+    "state": "CA",
+    "address": "888 Malibu Road",
+    "postalCode": "90265",
+    "coordinates": "POINT(-118.774518 34.025922)"
+  },
+  {
+    "id": 16,
+    "country": "United States",
+    "city": "Glendale",
+    "state": "CA",
+    "address": "777 Brand Blvd",
+    "postalCode": "91203",
+    "coordinates": "POINT(-118.254708 34.142508)"
+  },
+  {
+    "id": 17,
+    "country": "United States",
+    "city": "Torrance",
+    "state": "CA",
+    "address": "555 Torrance Blvd",
+    "postalCode": "90503",
+    "coordinates": "POINT(-118.352575 33.835849)"
+  },
+  {
+    "id": 18,
+    "country": "United States",
+    "city": "Beverly Hills",
+    "state": "CA",
+    "address": "789 Rodeo Dr",
+    "postalCode": "90210",
+    "coordinates": "POINT(-118.400356 34.073620)"
+  },
+  {
+    "id": 19,
+    "country": "United States",
+    "city": "Miami Beach",
+    "state": "FL",
+    "address": "5077 N Bay Rd",
+    "postalCode": "33140",
+    "coordinates": "POINT(-80.132 25.8279)"
+  },
+  {
     "id": 20,
+    "country": "Austria",
+    "city": "Innsbruck",
+    "state": "Tyrol",
+    "address": "Maria-Theresien-Straße 13",
+    "postalCode": "6020",
+    "coordinates": "POINT(11.404100 47.269210)"
+  },
+  {
+    "id": 21,
+    "country": "Austria",
+    "city": "Bregenz",
+    "state": "Vorarlberg",
+    "address": "Marktstraße 3",
+    "postalCode": "6900",
+    "coordinates": "POINT(9.747170 47.503570)"
+  },
+  {
+    "id": 22,
+    "country": "Austria",
+    "city": "St. Pölten",
+    "state": "Lower Austria",
+    "address": "Landhausplatz 1",
+    "postalCode": "3100",
+    "coordinates": "POINT(15.626720 48.203100)"
+  },
+  {
+    "id": 23,
     "country": "Austria",
     "city": "Krems an der Donau",
     "state": "Lower Austria",
@@ -180,40 +208,12 @@
     "coordinates": "POINT(15.620640 48.408160)"
   },
   {
-    "id": 21,
+    "id": 24,
     "country": "Austria",
     "city": "Eisenstadt",
     "state": "Burgenland",
     "address": "Hauptstraße 5",
     "postalCode": "7000",
-    "coordinates": "POINT(16.521400 47.845400)"
-  },
-  {
-  "id": 22,
-  "country": "Austria",
-  "city": "Wels",
-  "state": "Upper Austria",
-  "address": "Stadtplatz 1",
-  "postalCode": "4600",
-  "coordinates": "POINT(14.0333 48.1667)"
-},
-{
-  "id": 23,
-  "country": "Austria",
-  "city": "Wiener Neustadt",
-  "state": "Lower Austria",
-  "address": "Hauptplatz 1",
-  "postalCode": "2700",
-  "coordinates": "POINT(16.2500 47.8170)"
-},
-{
-  "id": 24,
-  "country": "Austria",
-  "city": "Steyr",
-  "state": "Upper Austria",
-  "address": "Hauptplatz 3",
-  "postalCode": "4400",
-  "coordinates": "POINT(14.4213 48.0427)"
-}
-
+    "coordinates": "POINT(16.5214 47.8454)"
+  }
 ]
