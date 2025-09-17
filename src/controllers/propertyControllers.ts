@@ -154,7 +154,6 @@ export const getProperties = async (
         where.leases = { some: { startDate: { lte: dt } } };
     }
 
-    // --- replace the previous geospatial block with this ---
     if (latitude && longitude) {
       const lat = parseFloat(latitude as string);
       const lng = parseFloat(longitude as string);
@@ -163,26 +162,46 @@ export const getProperties = async (
           ? Number(req.query.radiusKm)
           : 5;
 
-        // Convert meters -> degrees (approx) because we'll use geometry (degrees)
-        // 1 degree ~= 111_320 meters (approx at equator); this is fine for local searches.
+        // convert km -> meters -> approximate degrees (latitude)
+        // 1 degree latitude ≈ 111320 meters (approx.)
         const meters = radiusKm * 1000;
-        const degrees = meters / 111320;
+        const degLat = meters / 111320;
+
+        // longitude degrees depend on latitude
+        const degLng = degLat / Math.cos((lat * Math.PI) / 180);
 
         const schema = getDbSchema(); // validated
 
-        // Use geometry-based ST_DWithin (unqualified functions) to avoid PostGIS schema/type lookup issues.
-        // Note: geometry in 4326 uses degrees, so we compare degrees not meters.
+        // Use ST_AsText to avoid any `::geometry` / `::geography` casts.
+        // ST_AsText(coordinates) returns 'POINT(lon lat)' — remove 'POINT(' and ')' and split.
+        // We build a fast bounding box (lon between [lng-degLng, lng+degLng] AND lat between [...]).
         const sql = `
-          SELECT id
-          FROM "${schema}"."Location"
-          WHERE ST_DWithin(
-            coordinates::geometry,
-            ST_SetSRID(ST_MakePoint($1::double precision, $2::double precision), 4326)::geometry,
-            $3::double precision
-          )
-        `;
+      SELECT id
+      FROM "${schema}"."Location"
+      WHERE
+        (
+          (split_part(replace(replace(ST_AsText(coordinates),'POINT(',''),')',''), ' ', 1))::double precision
+          BETWEEN $1 AND $2
+        )
+        AND
+        (
+          (split_part(replace(replace(ST_AsText(coordinates),'POINT(',''),')',''), ' ', 2))::double precision
+          BETWEEN $3 AND $4
+        )
+    `;
 
-        const rows = (await prisma.$queryRawUnsafe(sql, lng, lat, degrees)) as {
+        const minLng = lng - degLng;
+        const maxLng = lng + degLng;
+        const minLat = lat - degLat;
+        const maxLat = lat + degLat;
+
+        const rows = (await prisma.$queryRawUnsafe(
+          sql,
+          minLng,
+          maxLng,
+          minLat,
+          maxLat
+        )) as {
           id: number;
         }[];
         const locIds = rows.map((r) => r.id);
