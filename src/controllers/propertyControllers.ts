@@ -1,4 +1,5 @@
 // File: server/src/controllers/propertyControllers.ts
+
 import { Request, Response } from "express";
 import { PrismaClient, Prisma, Location } from "@prisma/client";
 import { wktToGeoJSON } from "@terraformer/wkt";
@@ -41,146 +42,134 @@ export const getProperties = async (
       availableFrom,
       latitude,
       longitude,
-      radiusKm,
     } = req.query;
 
-    // Build safe Prisma where object
-    const where: any = {};
+    // Build dynamic WHERE clause as Prisma.Sql fragments
+    const whereConditions: Prisma.Sql[] = [];
 
-    // favorites
     if (favoriteIds) {
       const ids = (favoriteIds as string)
         .split(",")
-        .map((s) => Number(s))
-        .filter(Boolean);
-      if (ids.length) where.id = { in: ids };
+        .map(Number)
+        .filter((n) => !isNaN(n));
+      if (ids.length) {
+        whereConditions.push(Prisma.sql`p.id IN (${Prisma.join(ids)})`);
+      }
     }
 
-    // price
-    if (priceMin || priceMax) {
-      where.pricePerMonth = {};
-      if (!isNaN(Number(priceMin))) where.pricePerMonth.gte = Number(priceMin);
-      if (!isNaN(Number(priceMax))) where.pricePerMonth.lte = Number(priceMax);
+    if (priceMin) {
+      const pm = Number(priceMin);
+      if (!isNaN(pm)) {
+        whereConditions.push(Prisma.sql`p."pricePerMonth" >= ${pm}`);
+      }
+    }
+    if (priceMax) {
+      const pM = Number(priceMax);
+      if (!isNaN(pM)) {
+        whereConditions.push(Prisma.sql`p."pricePerMonth" <= ${pM}`);
+      }
     }
 
-    // beds / baths
-    if (beds && beds !== "any" && !isNaN(Number(beds)))
-      where.beds = { gte: Number(beds) };
-    if (baths && baths !== "any" && !isNaN(Number(baths)))
-      where.baths = { gte: Number(baths) };
-
-    // square feet
-    if (!isNaN(Number(squareFeetMin)) || !isNaN(Number(squareFeetMax))) {
-      where.squareFeet = {};
-      if (!isNaN(Number(squareFeetMin)))
-        where.squareFeet.gte = Number(squareFeetMin);
-      if (!isNaN(Number(squareFeetMax)))
-        where.squareFeet.lte = Number(squareFeetMax);
+    if (beds && beds !== "any") {
+      const b = Number(beds);
+      if (!isNaN(b)) {
+        whereConditions.push(Prisma.sql`p.beds >= ${b}`);
+      }
+    }
+    if (baths && baths !== "any") {
+      const bt = Number(baths);
+      if (!isNaN(bt)) {
+        whereConditions.push(Prisma.sql`p.baths >= ${bt}`);
+      }
     }
 
-    // property type (enum)
-    if (propertyType && propertyType !== "any")
-      where.propertyType = propertyType;
+    if (squareFeetMin) {
+      const sfMin = Number(squareFeetMin);
+      if (!isNaN(sfMin)) {
+        whereConditions.push(Prisma.sql`p."squareFeet" >= ${sfMin}`);
+      }
+    }
+    if (squareFeetMax) {
+      const sfMax = Number(squareFeetMax);
+      if (!isNaN(sfMax)) {
+        whereConditions.push(Prisma.sql`p."squareFeet" <= ${sfMax}`);
+      }
+    }
 
-    // amenities - use Prisma array filters (hasSome or hasEvery depending on semantics)
+    if (propertyType && propertyType !== "any") {
+      whereConditions.push(
+        Prisma.sql`p."propertyType" = ${propertyType}::"PropertyType"`
+      );
+    }
+
     if (amenities && amenities !== "any") {
-      const amenArray = (amenities as string)
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const amenArray = (amenities as string).split(",").map((s) => s.trim());
       if (amenArray.length) {
-        // choose hasSome (matches if property has any of the requested amenities).
-        // use hasEvery if you require ALL provided amenities
-        where.amenities = { hasSome: amenArray };
+        whereConditions.push(Prisma.sql`p.amenities @> ${amenArray}`);
       }
     }
 
-    // Availability filter (optional) — example: if you want properties that do NOT have an active lease overlapping requested date
-    // The previous implementation had an EXISTS that likely filtered incorrectly.
-    // If you want to filter by availabilityOnDate (availableFrom), you should define what "available" means:
-    // e.g. property is available if it has no lease that includes availableFrom (no lease where start <= date <= end)
-    let locationFilteredIds: number[] | undefined = undefined;
     if (availableFrom && availableFrom !== "any") {
-      const dt = new Date(availableFrom as string);
+      const dateStr = availableFrom as string;
+      const dt = new Date(dateStr);
       if (!isNaN(dt.getTime())) {
-        // Get property ids that DO NOT have a lease overlapping dt
-        const rows = await prisma.$queryRaw<
-          { id: number }[]
-        >`SELECT id FROM "Property" p WHERE NOT EXISTS (
-              SELECT 1 FROM "Lease" l
-              WHERE l."propertyId" = p.id
-                AND ${dt.toISOString()}::timestamptz BETWEEN l."startDate" AND l."endDate"
-            )`;
-        const allowedIds = rows.map((r) => r.id);
-        // If there are zero allowedIds, just return early
-        if (allowedIds.length === 0) {
-          res.status(200).json([]);
-          return;
-        }
-        where.id = where.id
-          ? {
-              ...where.id,
-              in: allowedIds.filter((id) =>
-                Array.isArray(where.id.in) ? where.id.in.includes(id) : true
-              ),
-            }
-          : { in: allowedIds };
+        whereConditions.push(
+          Prisma.sql`EXISTS (
+            SELECT 1
+            FROM "Lease" l
+            WHERE l."propertyId" = p.id
+              AND l."startDate" <= ${dt.toISOString()}
+          )`
+        );
       }
     }
 
-    // Geospatial filtering: if lat/lng provided, query for property IDs in radius (meters) using geography
     if (latitude && longitude) {
-      const lat = Number(latitude);
-      const lng = Number(longitude);
+      const lat = parseFloat(latitude as string);
+      const lng = parseFloat(longitude as string);
       if (!isNaN(lat) && !isNaN(lng)) {
-        const rk = !isNaN(Number(radiusKm)) ? Number(radiusKm) : 5;
-        const meters = Math.round(rk * 1000);
-
-        // Safe parameterized raw query to get property IDs within radius (use geography to measure in meters)
-        const idsRows = (await prisma.$queryRaw<{ id: number }[]>`SELECT p.id
-            FROM "Property" p
-            JOIN "Location" l ON p."locationId" = l.id
-            WHERE ST_DWithin(
-              l.coordinates::geography,
-              ST_SetSRID(ST_MakePoint(${lng}::double precision, ${lat}::double precision), 4326)::geography,
-              ${meters}::double precision
-            )`) as { id: number }[];
-
-        const ids = idsRows.map((r) => r.id);
-        if (ids.length === 0) {
-          res.status(200).json([]); // no properties in radius
-          return;
-        }
-        // Intersect with any existing id filter
-        if (where.id && where.id.in) {
-          where.id.in = where.id.in.filter((existingId: number) =>
-            ids.includes(existingId)
-          );
-          if (where.id.in.length === 0) {
-            res.status(200).json([]);
-            return;
-          }
-        } else {
-          where.id = { in: ids };
-        }
+        // Approximate 1000 km radius → ~9° (111 km per degree)
+        const km = 1000;
+        const deg = km / 111;
+        whereConditions.push(
+          Prisma.sql`ST_DWithin(
+            l.coordinates::geometry,
+            ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326),
+            ${deg}
+          )`
+        );
       }
     }
 
-    // Final fetch using Prisma (safe & includes relation data)
-    const properties = await prisma.property.findMany({
-      where,
-      include: {
-        location: true,
-        manager: true,
-      },
-      orderBy: { postedDate: "desc" },
-    });
+    // Construct full SQL. Join Property (p) and Location (l).
+    const completeQuery = Prisma.sql`
+      SELECT
+        p.*,
+        json_build_object(
+          'id',   l.id,
+          'address',    l.address,
+          'city',       l.city,
+          'state',      l.state,
+          'country',    l.country,
+          'postalCode', l."postalCode",
+          'coordinates', json_build_object(
+            'longitude', ST_X(l."coordinates"::geometry),
+            'latitude',  ST_Y(l."coordinates"::geometry)
+          )
+        ) as location
+      FROM "Property" p
+      JOIN "Location" l ON p."locationId" = l.id
+      ${
+        whereConditions.length > 0
+          ? Prisma.sql`WHERE ${Prisma.join(whereConditions, " AND ")}`
+          : Prisma.empty
+      }
+    `;
 
-    // Convert location coordinates (WKT -> lon/lat) on the server if you still store as geometry/text, but since Location stores geometry,
-    // the client can read coordinates using ST_X/ST_Y or we can return them via a small raw query if needed.
+    const properties = await prisma.$queryRaw(completeQuery);
     res.status(200).json(properties);
   } catch (error: any) {
-    console.error("Error retrieving properties (new safe query):", error);
+    console.error("Error retrieving properties:", error);
     res
       .status(500)
       .json({ message: `Error retrieving properties: ${error.message}` });
@@ -228,7 +217,7 @@ export const getProperty = async (
       geoJSON = wktToGeoJSON(wkt);
       [lng, lat] = geoJSON.coordinates || [0, 0];
     } catch (_) {
-      // WKT parsing error -> default to (0,0)
+      // WKT parsing error → default to (0,0)
     }
 
     const propertyWithCoords = {
@@ -250,13 +239,17 @@ export const getProperty = async (
 
 /**
  * POST /properties
+ * - Creates a new Property + Location pair.
+ * - Expects multipart/form-data with fields:
+ *     • address, city, state, country, postalCode, managerCognitoId, pricePerMonth, securityDeposit, etc.
+ *     • photos[] (one or more image files)
  */
 export const createProperty = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    const files = (req.files as Express.Multer.File[]) || [];
+    const files = req.files as Express.Multer.File[];
     const {
       address,
       city,
@@ -289,7 +282,7 @@ export const createProperty = async (
       lat = parseFloat(geoResp.data[0].lat);
     }
 
-    // 2) Insert Location (unqualified PostGIS functions and explicit geometry usage)
+    // 2) Insert Location
     const [newLocation] = (await prisma.$queryRaw<Location[]>`
       INSERT INTO "Location" (address, city, state, country, "postalCode", coordinates)
       VALUES (
@@ -303,15 +296,41 @@ export const createProperty = async (
       RETURNING id, address, city, state, country, "postalCode", ST_AsText(coordinates) as coordinates;
     `) as Location[];
 
-    // 3) (Optional) upload files to S3 — left commented as in your original
-    // ...
+    // 3) Upload each file to S3 and collect its public URL
+    // const photoUrls: string[] = [];
+    // if (files && files.length) {
+    //   if (!process.env.S3_BUCKET_NAME) {
+    //     throw new Error("Missing S3_BUCKET_NAME in environment");
+    //   }
+    //   for (const file of files) {
+    //     const key = `properties/${Date.now()}-${file.originalname}`;
+    //     const uploadParams = {
+    //       Bucket: process.env.S3_BUCKET_NAME!, // non-null assertion
+    //       Key: key,
+    //       Body: file.buffer,
+    //       ContentType: file.mimetype,
+    //     };
 
-    // 4) Create property record
+    //     const uploadWatch = new Upload({
+    //       client: s3Client,
+    //       params: uploadParams,
+    //     });
+
+    //     const uploadResult = await uploadWatch.done();
+    //     // uploadResult.Location is the public URL (if bucket is public)
+    //     if (uploadResult.Location) {
+    //       photoUrls.push(uploadResult.Location);
+    //     }
+    //   }
+    // }
+
+    // 4) Create the Property record
     const newProperty = await prisma.property.create({
       data: {
         ...propertyData,
         locationId: newLocation.id,
         managerCognitoId,
+        // photoUrls, // URLs returned by S3 (empty array if none)
         amenities:
           typeof propertyData.amenities === "string"
             ? propertyData.amenities.split(",").map((s: string) => s.trim())
@@ -343,8 +362,6 @@ export const createProperty = async (
       .json({ message: `Error creating property: ${error.message}` });
   }
 };
-
-// updateProperty and deleteProperty unchanged (use your prior implementations)
 
 /**
  * PUT /properties/:id
