@@ -46,122 +46,112 @@ const s3Client = new client_s3_1.S3Client({
 const getProperties = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { favoriteIds, priceMin, priceMax, beds, baths, propertyType, squareFeetMin, squareFeetMax, amenities, availableFrom, latitude, longitude, radiusKm, } = req.query;
-        // Build a Prisma "where" object (safe)
+        // Build safe Prisma where object
         const where = {};
-        // favorites -> id IN (...)
+        // favorites
         if (favoriteIds) {
             const ids = favoriteIds
                 .split(",")
-                .map((s) => Number(s.trim()))
-                .filter((n) => !isNaN(n));
+                .map((s) => Number(s))
+                .filter(Boolean);
             if (ids.length)
                 where.id = { in: ids };
         }
-        // price range
+        // price
         if (priceMin || priceMax) {
             where.pricePerMonth = {};
-            const pm = Number(priceMin);
-            const pM = Number(priceMax);
-            if (!isNaN(pm))
-                where.pricePerMonth.gte = pm;
-            if (!isNaN(pM))
-                where.pricePerMonth.lte = pM;
+            if (!isNaN(Number(priceMin)))
+                where.pricePerMonth.gte = Number(priceMin);
+            if (!isNaN(Number(priceMax)))
+                where.pricePerMonth.lte = Number(priceMax);
         }
         // beds / baths
-        if (beds && beds !== "any") {
-            const b = Number(beds);
-            if (!isNaN(b))
-                where.beds = { gte: b };
-        }
-        if (baths && baths !== "any") {
-            const bt = Number(baths);
-            if (!isNaN(bt))
-                where.baths = { gte: bt };
-        }
+        if (beds && beds !== "any" && !isNaN(Number(beds)))
+            where.beds = { gte: Number(beds) };
+        if (baths && baths !== "any" && !isNaN(Number(baths)))
+            where.baths = { gte: Number(baths) };
         // square feet
-        if (squareFeetMin || squareFeetMax) {
+        if (!isNaN(Number(squareFeetMin)) || !isNaN(Number(squareFeetMax))) {
             where.squareFeet = {};
-            const sfMin = Number(squareFeetMin);
-            const sfMax = Number(squareFeetMax);
-            if (!isNaN(sfMin))
-                where.squareFeet.gte = sfMin;
-            if (!isNaN(sfMax))
-                where.squareFeet.lte = sfMax;
+            if (!isNaN(Number(squareFeetMin)))
+                where.squareFeet.gte = Number(squareFeetMin);
+            if (!isNaN(Number(squareFeetMax)))
+                where.squareFeet.lte = Number(squareFeetMax);
         }
-        // propertyType
-        if (propertyType && propertyType !== "any") {
+        // property type (enum)
+        if (propertyType && propertyType !== "any")
             where.propertyType = propertyType;
-        }
-        // amenities (use Prisma array filter)
+        // amenities - use Prisma array filters (hasSome or hasEvery depending on semantics)
         if (amenities && amenities !== "any") {
             const amenArray = amenities
                 .split(",")
                 .map((s) => s.trim())
                 .filter(Boolean);
             if (amenArray.length) {
-                // hasEvery => property must have all requested amenities
-                where.amenities = { hasEvery: amenArray };
+                // choose hasSome (matches if property has any of the requested amenities).
+                // use hasEvery if you require ALL provided amenities
+                where.amenities = { hasSome: amenArray };
             }
         }
-        // Handle availableFrom properly:
-        // A property is considered available on a date if it is NOT occupied by a lease that covers that date.
+        // Availability filter (optional) — example: if you want properties that do NOT have an active lease overlapping requested date
+        // The previous implementation had an EXISTS that likely filtered incorrectly.
+        // If you want to filter by availabilityOnDate (availableFrom), you should define what "available" means:
+        // e.g. property is available if it has no lease that includes availableFrom (no lease where start <= date <= end)
+        let locationFilteredIds = undefined;
         if (availableFrom && availableFrom !== "any") {
             const dt = new Date(availableFrom);
             if (!isNaN(dt.getTime())) {
-                // Find propertyIds that ARE occupied on that date
-                const occupied = (yield prisma.$queryRaw `SELECT DISTINCT "propertyId" FROM "Lease" WHERE ${dt.toISOString()}::timestamp BETWEEN "startDate" AND "endDate";`) ||
-                    [];
-                const occupiedIds = occupied.map((r) => r.propertyId);
-                // Exclude occupied property IDs
-                if (occupiedIds.length) {
-                    // respect any existing where.id condition
-                    if (where.id && where.id.in) {
-                        // intersect in & notIn logic
-                        where.id = {
-                            in: where.id.in.filter((i) => !occupiedIds.includes(i)),
-                        };
-                    }
-                    else {
-                        where.id = { notIn: occupiedIds };
-                    }
+                // Get property ids that DO NOT have a lease overlapping dt
+                const rows = yield prisma.$queryRaw `SELECT id FROM "Property" p WHERE NOT EXISTS (
+              SELECT 1 FROM "Lease" l
+              WHERE l."propertyId" = p.id
+                AND ${dt.toISOString()}::timestamptz BETWEEN l."startDate" AND l."endDate"
+            )`;
+                const allowedIds = rows.map((r) => r.id);
+                // If there are zero allowedIds, just return early
+                if (allowedIds.length === 0) {
+                    res.status(200).json([]);
+                    return;
                 }
+                where.id = where.id
+                    ? Object.assign(Object.assign({}, where.id), { in: allowedIds.filter((id) => Array.isArray(where.id.in) ? where.id.in.includes(id) : true) }) : { in: allowedIds };
             }
         }
-        // Geospatial filter: if latitude & longitude provided, find property IDs within radius (meters),
-        // then constrain `where.id.in` to those IDs. This avoids complex SQL assembly.
+        // Geospatial filtering: if lat/lng provided, query for property IDs in radius (meters) using geography
         if (latitude && longitude) {
-            const lat = parseFloat(latitude);
-            const lng = parseFloat(longitude);
+            const lat = Number(latitude);
+            const lng = Number(longitude);
             if (!isNaN(lat) && !isNaN(lng)) {
                 const rk = !isNaN(Number(radiusKm)) ? Number(radiusKm) : 5;
-                const meters = rk * 1000;
-                // Use geography to get accurate meters distance
-                const nearby = (yield prisma.$queryRaw `SELECT p.id
+                const meters = Math.round(rk * 1000);
+                // Safe parameterized raw query to get property IDs within radius (use geography to measure in meters)
+                const idsRows = (yield prisma.$queryRaw `SELECT p.id
             FROM "Property" p
             JOIN "Location" l ON p."locationId" = l.id
             WHERE ST_DWithin(
               l.coordinates::geography,
               ST_SetSRID(ST_MakePoint(${lng}::double precision, ${lat}::double precision), 4326)::geography,
               ${meters}::double precision
-            );`) || [];
-                const nearbyIds = nearby.map((r) => r.id);
-                // If no nearby IDs, return empty result immediately
-                if (nearbyIds.length === 0) {
-                    res.status(200).json([]);
+            )`);
+                const ids = idsRows.map((r) => r.id);
+                if (ids.length === 0) {
+                    res.status(200).json([]); // no properties in radius
                     return;
                 }
-                // merge with existing where.id
+                // Intersect with any existing id filter
                 if (where.id && where.id.in) {
-                    where.id = {
-                        in: where.id.in.filter((i) => nearbyIds.includes(i)),
-                    };
+                    where.id.in = where.id.in.filter((existingId) => ids.includes(existingId));
+                    if (where.id.in.length === 0) {
+                        res.status(200).json([]);
+                        return;
+                    }
                 }
                 else {
-                    where.id = { in: nearbyIds };
+                    where.id = { in: ids };
                 }
             }
         }
-        // Finally query with Prisma client (safe)
+        // Final fetch using Prisma (safe & includes relation data)
         const properties = yield prisma.property.findMany({
             where,
             include: {
@@ -169,21 +159,13 @@ const getProperties = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                 manager: true,
             },
             orderBy: { postedDate: "desc" },
-            take: 1000,
         });
-        // Attach numeric coordinates (ST_X/ST_Y) for each property location (like your existing endpoints)
-        const enhanced = yield Promise.all(properties.map((p) => __awaiter(void 0, void 0, void 0, function* () {
-            const coords = (yield prisma.$queryRaw `SELECT ST_X(coordinates::geometry) AS longitude, ST_Y(coordinates::geometry) AS latitude FROM "Location" WHERE id = ${p.locationId};`) ||
-                [];
-            return Object.assign(Object.assign({}, p), { location: Object.assign(Object.assign({}, p.location), { coordinates: (coords[0] && {
-                        longitude: Number(coords[0].longitude),
-                        latitude: Number(coords[0].latitude),
-                    }) || { longitude: 0, latitude: 0 } }) });
-        })));
-        res.status(200).json(enhanced);
+        // Convert location coordinates (WKT -> lon/lat) on the server if you still store as geometry/text, but since Location stores geometry,
+        // the client can read coordinates using ST_X/ST_Y or we can return them via a small raw query if needed.
+        res.status(200).json(properties);
     }
     catch (error) {
-        console.error("Error retrieving properties (new handler):", error);
+        console.error("Error retrieving properties (new safe query):", error);
         res
             .status(500)
             .json({ message: `Error retrieving properties: ${error.message}` });
