@@ -1,5 +1,4 @@
 "use strict";
-// File: server/src/controllers/propertyControllers.ts
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -30,55 +29,6 @@ const wkt_1 = require("@terraformer/wkt");
 const client_s3_1 = require("@aws-sdk/client-s3");
 const axios_1 = __importDefault(require("axios"));
 const prisma = new client_1.PrismaClient();
-// add after const prisma = new PrismaClient();
-function getDbSchema() {
-    // Prefer explicit env var DB_SCHEMA; fallback to parsing DATABASE_URL ?schema=...
-    let schema = (process.env.DB_SCHEMA || "").trim();
-    if (!schema && process.env.DATABASE_URL) {
-        const m = process.env.DATABASE_URL.match(/[?&]schema=([a-zA-Z0-9_]+)/);
-        if (m)
-            schema = m[1];
-    }
-    if (!schema) {
-        // If still missing, fallback to 'public' (but log so you can notice)
-        console.warn("DB schema not provided; defaulting to 'public'. Set DB_SCHEMA in your .env");
-        schema = "public";
-    }
-    // Validate to avoid SQL injection when we inject schema into SQL strings
-    if (!/^[a-zA-Z0-9_]+$/.test(schema)) {
-        throw new Error(`Invalid DB schema name: ${schema}`);
-    }
-    return schema;
-}
-// PostGIS schema / function detector (cached)
-let _postgisSchema = null;
-function detectPostgisSchema() {
-    return __awaiter(this, void 0, void 0, function* () {
-        var _a;
-        if (_postgisSchema)
-            return _postgisSchema;
-        try {
-            // First look for the schema that contains the st_makepoint function
-            const res = (yield prisma.$queryRawUnsafe(`SELECT n.nspname AS schema
-       FROM pg_proc p
-       JOIN pg_namespace n ON p.pronamespace = n.oid
-       WHERE p.proname = 'st_makepoint'
-       LIMIT 1`));
-            const schema = (((_a = res === null || res === void 0 ? void 0 : res[0]) === null || _a === void 0 ? void 0 : _a.schema) || "public").trim();
-            if (!/^[a-zA-Z0-9_]+$/.test(schema)) {
-                throw new Error("invalid postgis schema detected");
-            }
-            _postgisSchema = schema;
-            console.log("Detected PostGIS schema:", _postgisSchema);
-            return _postgisSchema;
-        }
-        catch (err) {
-            console.warn("Failed to detect PostGIS schema, defaulting to public", err);
-            _postgisSchema = "public";
-            return _postgisSchema;
-        }
-    });
-}
 // Initialize S3 client (ensure AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET_NAME are set in .env)
 if (!process.env.AWS_REGION) {
     console.error("Missing AWS_REGION in environment");
@@ -95,112 +45,115 @@ const s3Client = new client_s3_1.S3Client({
  */
 const getProperties = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { favoriteIds, priceMin, priceMax, beds, baths, propertyType, squareFeetMin, squareFeetMax, amenities, availableFrom, latitude, longitude, } = req.query;
-        const where = {};
-        // favorites
+        const { favoriteIds, priceMin, priceMax, beds, baths, propertyType, squareFeetMin, squareFeetMax, amenities, availableFrom, latitude, longitude, radiusKm, } = req.query;
+        // Build dynamic WHERE clause as Prisma.Sql fragments
+        const whereConditions = [];
         if (favoriteIds) {
             const ids = favoriteIds
                 .split(",")
-                .map((s) => Number(s.trim()))
+                .map(Number)
                 .filter((n) => !isNaN(n));
-            if (ids.length)
-                where.id = { in: ids };
+            if (ids.length) {
+                whereConditions.push(client_1.Prisma.sql `p.id IN (${client_1.Prisma.join(ids)})`);
+            }
         }
-        // price
-        if (priceMin || priceMax) {
-            where.pricePerMonth = {};
-            if (priceMin && !isNaN(Number(priceMin)))
-                where.pricePerMonth.gte = Number(priceMin);
-            if (priceMax && !isNaN(Number(priceMax)))
-                where.pricePerMonth.lte = Number(priceMax);
+        if (priceMin) {
+            const pm = Number(priceMin);
+            if (!isNaN(pm))
+                whereConditions.push(client_1.Prisma.sql `p."pricePerMonth" >= ${pm}`);
         }
-        // beds / baths / squareFeet
-        if (beds && beds !== "any" && !isNaN(Number(beds)))
-            where.beds = { gte: Number(beds) };
-        if (baths && baths !== "any" && !isNaN(Number(baths)))
-            where.baths = { gte: Number(baths) };
-        if (squareFeetMin && !isNaN(Number(squareFeetMin))) {
-            where.squareFeet = Object.assign(Object.assign({}, (where.squareFeet || {})), { gte: Number(squareFeetMin) });
+        if (priceMax) {
+            const pM = Number(priceMax);
+            if (!isNaN(pM))
+                whereConditions.push(client_1.Prisma.sql `p."pricePerMonth" <= ${pM}`);
         }
-        if (squareFeetMax && !isNaN(Number(squareFeetMax))) {
-            where.squareFeet = Object.assign(Object.assign({}, (where.squareFeet || {})), { lte: Number(squareFeetMax) });
+        if (beds && beds !== "any") {
+            const b = Number(beds);
+            if (!isNaN(b))
+                whereConditions.push(client_1.Prisma.sql `p.beds >= ${b}`);
         }
-        // propertyType
-        if (propertyType && propertyType !== "any")
-            where.propertyType = propertyType;
-        // amenities (array)
+        if (baths && baths !== "any") {
+            const bt = Number(baths);
+            if (!isNaN(bt))
+                whereConditions.push(client_1.Prisma.sql `p.baths >= ${bt}`);
+        }
+        if (squareFeetMin) {
+            const sfMin = Number(squareFeetMin);
+            if (!isNaN(sfMin))
+                whereConditions.push(client_1.Prisma.sql `p."squareFeet" >= ${sfMin}`);
+        }
+        if (squareFeetMax) {
+            const sfMax = Number(squareFeetMax);
+            if (!isNaN(sfMax))
+                whereConditions.push(client_1.Prisma.sql `p."squareFeet" <= ${sfMax}`);
+        }
+        if (propertyType && propertyType !== "any") {
+            whereConditions.push(client_1.Prisma.sql `p."propertyType" = ${propertyType}::"PropertyType"`);
+        }
         if (amenities && amenities !== "any") {
-            const amenArray = amenities
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean);
+            const amenArray = amenities.split(",").map((s) => s.trim());
             if (amenArray.length)
-                where.amenities = { hasSome: amenArray };
+                whereConditions.push(client_1.Prisma.sql `p.amenities @> ${amenArray}`);
         }
-        // availableFrom -> has lease with startDate <= date
         if (availableFrom && availableFrom !== "any") {
-            const dt = new Date(availableFrom);
-            if (!isNaN(dt.getTime()))
-                where.leases = { some: { startDate: { lte: dt } } };
+            const dateStr = availableFrom;
+            const dt = new Date(dateStr);
+            if (!isNaN(dt.getTime())) {
+                whereConditions.push(client_1.Prisma.sql `EXISTS (
+             SELECT 1 FROM "Lease" l
+             WHERE l."propertyId" = p.id
+               AND l."startDate" <= ${dt.toISOString()}
+           )`);
+            }
         }
+        // Geospatial filter (approximate using degrees, avoids schema-qualified PostGIS calls)
         if (latitude && longitude) {
             const lat = parseFloat(latitude);
             const lng = parseFloat(longitude);
             if (!isNaN(lat) && !isNaN(lng)) {
-                const radiusKm = !isNaN(Number(req.query.radiusKm))
-                    ? Number(req.query.radiusKm)
-                    : 5;
-                // convert km -> meters -> approximate degrees (latitude)
-                // 1 degree latitude ≈ 111320 meters (approx.)
-                const meters = radiusKm * 1000;
-                const degLat = meters / 111320;
-                // longitude degrees depend on latitude
-                const degLng = degLat / Math.cos((lat * Math.PI) / 180);
-                const schema = getDbSchema(); // validated
-                // Use ST_AsText to avoid any `::geometry` / `::geography` casts.
-                // ST_AsText(coordinates) returns 'POINT(lon lat)' — remove 'POINT(' and ')' and split.
-                // We build a fast bounding box (lon between [lng-degLng, lng+degLng] AND lat between [...]).
-                const sql = `
-      SELECT id
-      FROM "${schema}"."Location"
-      WHERE
-        (
-          (split_part(replace(replace(ST_AsText(coordinates),'POINT(',''),')',''), ' ', 1))::double precision
-          BETWEEN $1 AND $2
-        )
-        AND
-        (
-          (split_part(replace(replace(ST_AsText(coordinates),'POINT(',''),')',''), ' ', 2))::double precision
-          BETWEEN $3 AND $4
-        )
-    `;
-                const minLng = lng - degLng;
-                const maxLng = lng + degLng;
-                const minLat = lat - degLat;
-                const maxLat = lat + degLat;
-                const rows = (yield prisma.$queryRawUnsafe(sql, minLng, maxLng, minLat, maxLat));
-                const locIds = rows.map((r) => r.id);
-                if (locIds.length === 0) {
-                    res.status(200).json([]); // nothing nearby
-                    return;
-                }
-                where.locationId = { in: locIds };
+                // radius in km (fallback to 5km)
+                const rk = !isNaN(Number(radiusKm)) ? Number(radiusKm) : 5;
+                const meters = rk * 1000;
+                // convert meters -> degrees (approx): 1 degree ≈ 111320 meters
+                const deg = meters / 111320;
+                // Use geometry-based ST_DWithin with degrees (no schema qualification)
+                whereConditions.push(client_1.Prisma.sql `ST_DWithin(
+            l.coordinates::geometry,
+            ST_SetSRID(ST_MakePoint(${lng}::double precision, ${lat}::double precision), 4326)::geometry,
+            ${deg}::double precision
+          )`);
             }
         }
-        const properties = yield prisma.property.findMany({
-            where,
-            include: {
-                location: true,
-                manager: true,
-            },
-        });
+        // Construct full SQL. Join Property (p) and Location (l).
+        const completeQuery = client_1.Prisma.sql `
+      SELECT
+        p.*,
+        json_build_object(
+          'id',   l.id,
+          'address',    l.address,
+          'city',       l.city,
+          'state',      l.state,
+          'country',    l.country,
+          'postalCode', l."postalCode",
+          'coordinates', json_build_object(
+            'longitude', ST_X(l."coordinates"::geometry),
+            'latitude',  ST_Y(l."coordinates"::geometry)
+          )
+        ) as location
+      FROM "Property" p
+      JOIN "Location" l ON p."locationId" = l.id
+      ${whereConditions.length > 0
+            ? client_1.Prisma.sql `WHERE ${client_1.Prisma.join(whereConditions, " AND ")}`
+            : client_1.Prisma.empty}
+    `;
+        const properties = yield prisma.$queryRaw(completeQuery);
         res.status(200).json(properties);
     }
-    catch (err) {
-        console.error("Error retrieving properties:", err);
+    catch (error) {
+        console.error("Error retrieving properties:", error);
         res
             .status(500)
-            .json({ message: `Error retrieving properties: ${err.message}` });
+            .json({ message: `Error retrieving properties: ${error.message}` });
     }
 });
 exports.getProperties = getProperties;
@@ -226,12 +179,11 @@ const getProperty = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             return;
         }
         // Fetch WKT from Location, convert to GeoJSON
-        const schema = getDbSchema();
-        const coordsResult = (yield prisma.$queryRawUnsafe(`
-    SELECT ST_AsText(coordinates) AS coordinates
-    FROM "${schema}"."Location"
-    WHERE id = ${property.location.id}
-  `));
+        const coordsResult = (yield prisma.$queryRaw `
+      SELECT ST_AsText(coordinates) AS coordinates
+      FROM "Location"
+      WHERE id = ${property.location.id}
+    `);
         const wkt = ((_a = coordsResult[0]) === null || _a === void 0 ? void 0 : _a.coordinates) || "";
         let geoJSON = {};
         let [lng, lat] = [0, 0];
@@ -240,7 +192,7 @@ const getProperty = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             [lng, lat] = geoJSON.coordinates || [0, 0];
         }
         catch (_) {
-            // WKT parsing error → default to (0,0)
+            // WKT parsing error -> default to (0,0)
         }
         const propertyWithCoords = Object.assign(Object.assign({}, property), { location: Object.assign(Object.assign({}, property.location), { coordinates: { longitude: lng, latitude: lat } }) });
         res.status(200).json(propertyWithCoords);
@@ -255,15 +207,11 @@ const getProperty = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
 exports.getProperty = getProperty;
 /**
  * POST /properties
- * - Creates a new Property + Location pair.
- * - Expects multipart/form-data with fields:
- *     • address, city, state, country, postalCode, managerCognitoId, pricePerMonth, securityDeposit, etc.
- *     • photos[] (one or more image files)
  */
 const createProperty = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b;
     try {
-        const files = req.files;
+        const files = req.files || [];
         const _c = req.body, { address, city, state, country, postalCode, managerCognitoId } = _c, propertyData = __rest(_c, ["address", "city", "state", "country", "postalCode", "managerCognitoId"]);
         // 1) Geocode via Nominatim
         const geocodeURL = `https://nominatim.openstreetmap.org/search?${new URLSearchParams({
@@ -282,52 +230,24 @@ const createProperty = (req, res) => __awaiter(void 0, void 0, void 0, function*
             lon = parseFloat(geoResp.data[0].lon);
             lat = parseFloat(geoResp.data[0].lat);
         }
-        // 2) Insert Location
-        const schema = getDbSchema();
-        const postgisSchema = yield detectPostgisSchema();
-        const insertSql = `
-    INSERT INTO "${schema}"."Location"
-      (address, city, state, country, "postalCode", coordinates)
-    VALUES
-      ($1, $2, $3, $4, $5,
-      ${postgisSchema}.st_setsrid(
-        ${postgisSchema}.st_makepoint($6::double precision, $7::double precision),
-        4326
-      )::${postgisSchema}.geography
+        // 2) Insert Location (unqualified PostGIS functions and explicit geometry usage)
+        const [newLocation] = (yield prisma.$queryRaw `
+      INSERT INTO "Location" (address, city, state, country, "postalCode", coordinates)
+      VALUES (
+        ${address},
+        ${city},
+        ${state},
+        ${country},
+        ${postalCode},
+        ST_SetSRID(ST_MakePoint(${lon}::double precision, ${lat}::double precision), 4326)
       )
-    RETURNING id, address, city, state, country, "postalCode", ST_AsText(coordinates) as coordinates;
-    `;
-        const [newLocation] = (yield prisma.$queryRawUnsafe(insertSql, address, city, state, country, postalCode, lon, lat));
-        // 3) Upload each file to S3 and collect its public URL
-        // const photoUrls: string[] = [];
-        // if (files && files.length) {
-        //   if (!process.env.S3_BUCKET_NAME) {
-        //     throw new Error("Missing S3_BUCKET_NAME in environment");
-        //   }
-        //   for (const file of files) {
-        //     const key = `properties/${Date.now()}-${file.originalname}`;
-        //     const uploadParams = {
-        //       Bucket: process.env.S3_BUCKET_NAME!, // non-null assertion
-        //       Key: key,
-        //       Body: file.buffer,
-        //       ContentType: file.mimetype,
-        //     };
-        //     const uploadWatch = new Upload({
-        //       client: s3Client,
-        //       params: uploadParams,
-        //     });
-        //     const uploadResult = await uploadWatch.done();
-        //     // uploadResult.Location is the public URL (if bucket is public)
-        //     if (uploadResult.Location) {
-        //       photoUrls.push(uploadResult.Location);
-        //     }
-        //   }
-        // }
-        // 4) Create the Property record
+      RETURNING id, address, city, state, country, "postalCode", ST_AsText(coordinates) as coordinates;
+    `);
+        // 3) (Optional) upload files to S3 — left commented as in your original
+        // ...
+        // 4) Create property record
         const newProperty = yield prisma.property.create({
-            data: Object.assign(Object.assign({}, propertyData), { locationId: newLocation.id, managerCognitoId, 
-                // photoUrls, // URLs returned by S3 (empty array if none)
-                amenities: typeof propertyData.amenities === "string"
+            data: Object.assign(Object.assign({}, propertyData), { locationId: newLocation.id, managerCognitoId, amenities: typeof propertyData.amenities === "string"
                     ? propertyData.amenities.split(",").map((s) => s.trim())
                     : [], highlights: typeof propertyData.highlights === "string"
                     ? propertyData.highlights.split(",").map((s) => s.trim())
@@ -347,6 +267,7 @@ const createProperty = (req, res) => __awaiter(void 0, void 0, void 0, function*
     }
 });
 exports.createProperty = createProperty;
+// updateProperty and deleteProperty unchanged (use your prior implementations)
 /**
  * PUT /properties/:id
  * - Updates an existing Property by ID.
