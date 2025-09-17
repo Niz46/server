@@ -46,111 +46,144 @@ const s3Client = new client_s3_1.S3Client({
 const getProperties = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { favoriteIds, priceMin, priceMax, beds, baths, propertyType, squareFeetMin, squareFeetMax, amenities, availableFrom, latitude, longitude, radiusKm, } = req.query;
-        // Build dynamic WHERE clause as Prisma.Sql fragments
-        const whereConditions = [];
+        // Build a Prisma "where" object (safe)
+        const where = {};
+        // favorites -> id IN (...)
         if (favoriteIds) {
             const ids = favoriteIds
                 .split(",")
-                .map(Number)
+                .map((s) => Number(s.trim()))
                 .filter((n) => !isNaN(n));
-            if (ids.length) {
-                whereConditions.push(client_1.Prisma.sql `p.id IN (${client_1.Prisma.join(ids)})`);
-            }
+            if (ids.length)
+                where.id = { in: ids };
         }
-        if (priceMin) {
+        // price range
+        if (priceMin || priceMax) {
+            where.pricePerMonth = {};
             const pm = Number(priceMin);
-            if (!isNaN(pm))
-                whereConditions.push(client_1.Prisma.sql `p."pricePerMonth" >= ${pm}`);
-        }
-        if (priceMax) {
             const pM = Number(priceMax);
+            if (!isNaN(pm))
+                where.pricePerMonth.gte = pm;
             if (!isNaN(pM))
-                whereConditions.push(client_1.Prisma.sql `p."pricePerMonth" <= ${pM}`);
+                where.pricePerMonth.lte = pM;
         }
+        // beds / baths
         if (beds && beds !== "any") {
             const b = Number(beds);
             if (!isNaN(b))
-                whereConditions.push(client_1.Prisma.sql `p.beds >= ${b}`);
+                where.beds = { gte: b };
         }
         if (baths && baths !== "any") {
             const bt = Number(baths);
             if (!isNaN(bt))
-                whereConditions.push(client_1.Prisma.sql `p.baths >= ${bt}`);
+                where.baths = { gte: bt };
         }
-        if (squareFeetMin) {
+        // square feet
+        if (squareFeetMin || squareFeetMax) {
+            where.squareFeet = {};
             const sfMin = Number(squareFeetMin);
-            if (!isNaN(sfMin))
-                whereConditions.push(client_1.Prisma.sql `p."squareFeet" >= ${sfMin}`);
-        }
-        if (squareFeetMax) {
             const sfMax = Number(squareFeetMax);
+            if (!isNaN(sfMin))
+                where.squareFeet.gte = sfMin;
             if (!isNaN(sfMax))
-                whereConditions.push(client_1.Prisma.sql `p."squareFeet" <= ${sfMax}`);
+                where.squareFeet.lte = sfMax;
         }
+        // propertyType
         if (propertyType && propertyType !== "any") {
-            whereConditions.push(client_1.Prisma.sql `p."propertyType" = ${propertyType}::"PropertyType"`);
+            where.propertyType = propertyType;
         }
+        // amenities (use Prisma array filter)
         if (amenities && amenities !== "any") {
-            const amenArray = amenities.split(",").map((s) => s.trim());
-            if (amenArray.length)
-                whereConditions.push(client_1.Prisma.sql `p.amenities @> ${amenArray}`);
-        }
-        if (availableFrom && availableFrom !== "any") {
-            const dateStr = availableFrom;
-            const dt = new Date(dateStr);
-            if (!isNaN(dt.getTime())) {
-                whereConditions.push(client_1.Prisma.sql `EXISTS (
-             SELECT 1 FROM "Lease" l
-             WHERE l."propertyId" = p.id
-               AND l."startDate" <= ${dt.toISOString()}
-           )`);
+            const amenArray = amenities
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean);
+            if (amenArray.length) {
+                // hasEvery => property must have all requested amenities
+                where.amenities = { hasEvery: amenArray };
             }
         }
-        // Geospatial filter (approximate using degrees, avoids schema-qualified PostGIS calls)
+        // Handle availableFrom properly:
+        // A property is considered available on a date if it is NOT occupied by a lease that covers that date.
+        if (availableFrom && availableFrom !== "any") {
+            const dt = new Date(availableFrom);
+            if (!isNaN(dt.getTime())) {
+                // Find propertyIds that ARE occupied on that date
+                const occupied = (yield prisma.$queryRaw `SELECT DISTINCT "propertyId" FROM "Lease" WHERE ${dt.toISOString()}::timestamp BETWEEN "startDate" AND "endDate";`) ||
+                    [];
+                const occupiedIds = occupied.map((r) => r.propertyId);
+                // Exclude occupied property IDs
+                if (occupiedIds.length) {
+                    // respect any existing where.id condition
+                    if (where.id && where.id.in) {
+                        // intersect in & notIn logic
+                        where.id = {
+                            in: where.id.in.filter((i) => !occupiedIds.includes(i)),
+                        };
+                    }
+                    else {
+                        where.id = { notIn: occupiedIds };
+                    }
+                }
+            }
+        }
+        // Geospatial filter: if latitude & longitude provided, find property IDs within radius (meters),
+        // then constrain `where.id.in` to those IDs. This avoids complex SQL assembly.
         if (latitude && longitude) {
             const lat = parseFloat(latitude);
             const lng = parseFloat(longitude);
             if (!isNaN(lat) && !isNaN(lng)) {
-                // radius in km (fallback to 5km)
                 const rk = !isNaN(Number(radiusKm)) ? Number(radiusKm) : 5;
                 const meters = rk * 1000;
-                // convert meters -> degrees (approx): 1 degree ≈ 111320 meters
-                const deg = meters / 111320;
-                // Use geometry-based ST_DWithin with degrees (no schema qualification)
-                whereConditions.push(client_1.Prisma.sql `ST_DWithin(
-            l.coordinates::geometry,
-            ST_SetSRID(ST_MakePoint(${lng}::double precision, ${lat}::double precision), 4326)::geometry,
-            ${deg}::double precision
-          )`);
+                // Use geography to get accurate meters distance
+                const nearby = (yield prisma.$queryRaw `SELECT p.id
+            FROM "Property" p
+            JOIN "Location" l ON p."locationId" = l.id
+            WHERE ST_DWithin(
+              l.coordinates::geography,
+              ST_SetSRID(ST_MakePoint(${lng}::double precision, ${lat}::double precision), 4326)::geography,
+              ${meters}::double precision
+            );`) || [];
+                const nearbyIds = nearby.map((r) => r.id);
+                // If no nearby IDs, return empty result immediately
+                if (nearbyIds.length === 0) {
+                    res.status(200).json([]);
+                    return;
+                }
+                // merge with existing where.id
+                if (where.id && where.id.in) {
+                    where.id = {
+                        in: where.id.in.filter((i) => nearbyIds.includes(i)),
+                    };
+                }
+                else {
+                    where.id = { in: nearbyIds };
+                }
             }
         }
-        // Construct full SQL. Join Property (p) and Location (l).
-        const completeQuery = client_1.Prisma.sql `
-      SELECT
-        p.*,
-        json_build_object(
-          'id',   l.id,
-          'address',    l.address,
-          'city',       l.city,
-          'state',      l.state,
-          'country',    l.country,
-          'postalCode', l."postalCode",
-          'coordinates', json_build_object(
-            'longitude', ST_X(l."coordinates"::geometry),
-            'latitude',  ST_Y(l."coordinates"::geometry)
-          )
-        ) as location
-      FROM "Property" p
-      JOIN "Location" l ON p."locationId" = l.id
-      ${whereConditions.length > 0
-            ? client_1.Prisma.sql `WHERE ${client_1.Prisma.join(whereConditions, " AND ")}`
-            : client_1.Prisma.empty}
-    `;
-        const properties = yield prisma.$queryRaw(completeQuery);
-        res.status(200).json(properties);
+        // Finally query with Prisma client (safe)
+        const properties = yield prisma.property.findMany({
+            where,
+            include: {
+                location: true,
+                manager: true,
+            },
+            orderBy: { postedDate: "desc" },
+            take: 1000,
+        });
+        // Attach numeric coordinates (ST_X/ST_Y) for each property location (like your existing endpoints)
+        const enhanced = yield Promise.all(properties.map((p) => __awaiter(void 0, void 0, void 0, function* () {
+            const coords = (yield prisma.$queryRaw `SELECT ST_X(coordinates::geometry) AS longitude, ST_Y(coordinates::geometry) AS latitude FROM "Location" WHERE id = ${p.locationId};`) ||
+                [];
+            return Object.assign(Object.assign({}, p), { location: Object.assign(Object.assign({}, p.location), { coordinates: (coords[0] && {
+                        longitude: Number(coords[0].longitude),
+                        latitude: Number(coords[0].latitude),
+                    }) || { longitude: 0, latitude: 0 } }) });
+        })));
+        res.status(200).json(enhanced);
     }
     catch (error) {
-        console.error("Error retrieving properties:", error);
+        console.error("Error retrieving properties (new handler):", error);
         res
             .status(500)
             .json({ message: `Error retrieving properties: ${error.message}` });
